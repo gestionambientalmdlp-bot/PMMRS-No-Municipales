@@ -29,11 +29,13 @@ import {
 } from 'lucide-react';
 import { PMMRSPlan, WasteItem, PlanChapter } from '../types';
 import { downloadPlanPdf, generatePlanHtml, openPrintWindow } from '../utils/printReport';
+import { processPlanCuadros } from '../utils/cuadrosProcessor';
 import { OFFICIAL_13_CHAPTERS } from '../data/promptsPmmrs';
 import { exportDraftPlanJson, parseDraftPlanFile, saveDraftToLocalStorage, getDraftFromLocalStorage } from '../utils/draftStorage';
-import { getAnnexForChapter } from '../utils/excelAnnexes';
+import { getAnnexForChapter, ANNEXES_RM_089 } from '../utils/excelAnnexes';
 import { AnnexExcelUploadCard } from './AnnexExcelUploadCard';
 import { FormattedChapterContent } from './FormattedChapterContent';
+import { OFFICIAL_RM089_ANNEXES } from '../data/officialAnnexes';
 import { useFirestore } from '../context/FirestoreContext';
 
 interface ElaborarPlanViewProps {
@@ -48,8 +50,9 @@ export const ElaborarPlanView: React.FC<ElaborarPlanViewProps> = ({
   loadDemoData
 }) => {
   const { contenidoMinimo, activeNormas, isFirestoreConnected } = useFirestore();
-  const [activeTab, setActiveTab] = useState<'empresa' | 'header' | 'residuos' | 'capitulos' | 'preview'>('empresa');
+  const [activeTab, setActiveTab] = useState<'empresa' | 'header' | 'residuos' | 'capitulos' | 'anexos' | 'preview'>('empresa');
   const [selectedChapterId, setSelectedChapterId] = useState<string>(activePlan.capitulos[0]?.id || 'cap-1');
+  const [selectedAnexoIndex, setSelectedAnexoIndex] = useState<number>(0);
   
   // Draft Continuation & Persistence State
   const jsonDraftInputRef = useRef<HTMLInputElement>(null);
@@ -259,17 +262,16 @@ export const ElaborarPlanView: React.FC<ElaborarPlanViewProps> = ({
                 : 'bg-gray-100 text-[#424242] hover:bg-gray-200'
             }`}
           >
-            Paso 4: Redacción Capítulos (1 al 13)
+            Paso 4: Capítulos (1 al 13)
           </button>
           <button
-            onClick={() => setActiveTab('preview')}
-            className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-              activeTab === 'preview'
-                ? 'bg-[#70BA74] text-white shadow'
-                : 'bg-[#FFDCF9] text-[#6C0053] hover:bg-[#f3cbe8]'
-            }`}
+            type="button"
+            onClick={loadDemoData}
+            className="flex items-center gap-1.5 bg-white hover:bg-gray-100 text-[#424242] border border-gray-300 px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
+            title="Cargar datos de demostración del Plan Modelo R.M. N.° 089-2023-MINAM"
           >
-            Paso 5: Vista Previa & Reporte PDF
+            <Sparkles className="w-3.5 h-3.5 text-[#70BA74]" />
+            <span>Cargar Demo</span>
           </button>
         </div>
 
@@ -285,16 +287,6 @@ export const ElaborarPlanView: React.FC<ElaborarPlanViewProps> = ({
 
           <button
             type="button"
-            onClick={() => jsonDraftInputRef.current?.click()}
-            className="flex items-center gap-1.5 bg-[#FFDCF9] hover:bg-[#f3cbe8] text-[#6C0053] px-3.5 py-2 rounded-xl text-xs font-bold border border-[#6C0053]/30 shadow-xs transition-all cursor-pointer"
-            title="Subir archivo Continuar_plan_*.json para continuar con su borrador"
-          >
-            <FolderOpen className="w-4 h-4 text-[#6C0053]" />
-            <span>Continuar Plan</span>
-          </button>
-
-          <button
-            type="button"
             onClick={handleSaveAdvanceDraft}
             className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-3.5 py-2 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
             title="Descargar archivo Continuar_plan_[Empresa].json con todos los campos y tablas"
@@ -305,12 +297,22 @@ export const ElaborarPlanView: React.FC<ElaborarPlanViewProps> = ({
 
           <button
             type="button"
-            onClick={loadDemoData}
-            className="flex items-center gap-1.5 bg-white hover:bg-gray-100 text-[#424242] border border-gray-300 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer"
-            title="Cargar datos de demostración"
+            onClick={() => jsonDraftInputRef.current?.click()}
+            className="flex items-center gap-1.5 bg-[#FFDCF9] hover:bg-[#f3cbe8] text-[#6C0053] px-3.5 py-2 rounded-xl text-xs font-bold border border-[#6C0053]/30 shadow-xs transition-all cursor-pointer"
+            title="Subir archivo Continuar_plan_*.json para continuar con su borrador"
           >
-            <Sparkles className="w-3.5 h-3.5 text-[#70BA74]" />
-            <span>Cargar Demo</span>
+            <FolderOpen className="w-4 h-4 text-[#6C0053]" />
+            <span>Continuar Plan</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSavePdf}
+            className="flex items-center gap-1.5 bg-[#6C0053] hover:bg-[#51003d] text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
+            title="Generar y descargar el Plan PMMRS oficial en formato PDF (A4)"
+          >
+            <Download className="w-4 h-4 text-[#70BA74]" />
+            <span>Descargar Plan</span>
           </button>
         </div>
       </div>
@@ -1176,170 +1178,429 @@ export const ElaborarPlanView: React.FC<ElaborarPlanViewProps> = ({
           <div className="flex justify-between pt-4">
             <button
               onClick={() => setActiveTab('residuos')}
-              className="bg-gray-100 text-[#424242] hover:bg-gray-200 px-6 py-3 rounded-xl font-bold text-sm"
+              className="bg-gray-100 text-[#424242] hover:bg-gray-200 px-6 py-3 rounded-xl font-bold text-sm cursor-pointer"
             >
               Anterior: Inventario de Residuos
             </button>
             <button
               onClick={() => setActiveTab('preview')}
-              className="flex items-center gap-2 bg-[#70BA74] hover:bg-[#5da761] text-white px-6 py-3 rounded-xl font-bold text-sm shadow"
+              className="flex items-center gap-2 bg-[#6C0053] hover:bg-[#51003d] text-white px-6 py-3 rounded-xl font-bold text-sm shadow cursor-pointer"
             >
-              <span>Siguiente: Vista Previa & PDF</span>
+              <span>Ver Vista Previa del Plan</span>
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         </div>
       )}
 
-      {/* TAB 5: VISTA PREVIA & PDF A4 */}
-      {activeTab === 'preview' && (
-        <div className="space-y-6">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white rounded-2xl p-5 shadow-sm border border-[#CCCCCC]/40 gap-4">
-            <div>
-              <h3 className="text-lg font-bold text-[#424242]">Vista Previa Oficial (Formato A4)</h3>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Estructura oficial conforme al Contenido Mínimo de la R.M. N.° 089-2023-MINAM.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                onClick={handleSavePdf}
-                className="flex items-center gap-2 bg-[#6C0053] hover:bg-[#51003d] text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
-                title="Generar y guardar el Plan PMMRS oficial directamente en formato PDF (A4)"
-              >
-                <Download className="w-4 h-4 text-[#70BA74]" />
-                <span>Descargar PDF</span>
-              </button>
-              <button
-                onClick={handlePrint}
-                className="flex items-center gap-2 bg-[#70BA74] hover:bg-[#5da761] text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
-                title="Abrir diálogo de impresión o guardar como PDF"
-              >
-                <Printer className="w-4 h-4 text-white" />
-                <span>Imprimir / Guardar como PDF</span>
-              </button>
-            </div>
-          </div>
+      {/* TAB 5: ANEXOS OFICIALES R.M. 089-2023-MINAM */}
+      {activeTab === 'anexos' && (() => {
+        const annexesList = (activePlan.anexos && activePlan.anexos.length > 0)
+          ? activePlan.anexos
+          : OFFICIAL_RM089_ANNEXES;
+        const currentAnexo = annexesList[selectedAnexoIndex] || annexesList[0];
 
-          {/* A4 Document Preview Container */}
-          <div className="bg-white rounded-2xl shadow-xl border border-[#CCCCCC] max-w-4xl mx-auto p-8 sm:p-12 space-y-8 font-serif text-[#222222] print-container">
-            {/* Institutional Header */}
-            <div className="border-b-2 border-[#6C0053] pb-6 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="w-20 flex items-center justify-start">
-                  {activePlan.header.logoUrl ? (
-                    <img
-                      src={activePlan.header.logoUrl}
-                      alt="Logotipo institucional"
-                      className="max-h-16 max-w-[80px] object-contain rounded"
-                    />
-                  ) : (
-                    <div className="w-16"></div>
-                  )}
+        return (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-[#CCCCCC]/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 bg-[#FFDCF9] text-[#6C0053] px-3 py-1 rounded-full text-xs font-bold mb-2">
+                  <span>Resolución Ministerial N.° 089-2023-MINAM</span>
+                  <span className="text-gray-400">•</span>
+                  <span>Colección Firebase: modelo_plan</span>
                 </div>
-                <div className="flex-1 text-center">
-                  <p className="text-sm font-sans uppercase tracking-widest text-gray-700 font-bold">
-                    {activePlan.header.razonSocialHeader || activePlan.company.razonSocial || 'EMPRESA TITULAR'}
-                  </p>
-                </div>
-                <div className="w-20"></div>
+                <h3 className="text-xl font-bold text-[#424242]">
+                  Anexos Oficiales del Plan de Minimización y Manejo (12 Anexos)
+                </h3>
+                <p className="text-xs text-gray-500 mt-1 max-w-3xl">
+                  Tablas metodológicas, matrices de ecodiseño, balance de flujo, compatibilidad química y presupuesto oficial copiados fielmente de la norma técnica del MINAM.
+                </p>
               </div>
-              <h1 className="text-xl font-extrabold uppercase text-[#6C0053] text-center">
-                {activePlan.header.tituloDocumento}
-              </h1>
-              <p className="text-xs font-sans text-gray-600 text-center">
-                {activePlan.header.version} | Fecha: {activePlan.header.fechaEmision}
-              </p>
-            </div>
 
-            {/* Section 1: General Data */}
-            <div className="space-y-3 font-sans text-xs">
-              <h3 className="font-bold uppercase tracking-wide text-sm text-[#6C0053] border-b border-gray-200 pb-1">
-                I. Datos Generales de la Empresa y Establecimiento
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-[#424242] bg-pink-50/40 p-4 rounded-xl border border-pink-100">
-                <p><strong>Razón Social:</strong> {activePlan.company.razonSocial}</p>
-                <p><strong>RUC:</strong> {activePlan.company.ruc}</p>
-                <p><strong>Nombre Comercial:</strong> {activePlan.company.nombreComercial}</p>
-                <p><strong>Domicilio Legal:</strong> {activePlan.company.domicilio}</p>
-                <p><strong>Ubicación:</strong> {activePlan.company.distrito}, {activePlan.company.provincia}, {activePlan.company.departamento}</p>
-                <p><strong>Representante Legal:</strong> {activePlan.company.representanteLegal} (DNI: {activePlan.company.dniRepresentante})</p>
-                <p><strong>Sector:</strong> {activePlan.company.sector}</p>
-                <p><strong>Número de Trabajadores:</strong> {activePlan.company.numeroTrabajadores}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={loadDemoData}
+                  className="flex items-center gap-1.5 bg-[#6C0053] hover:bg-[#51003d] text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow transition-all cursor-pointer"
+                  title="Sincronizar y recargar el Plan Modelo Oficial completo desde Firebase Firestore"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-[#70BA74]" />
+                  <span>Recargar Modelo desde Firestore</span>
+                </button>
               </div>
             </div>
 
-            {/* Chapters printed */}
-            <div className="space-y-6 pt-4 font-serif text-sm leading-relaxed">
-              {activePlan.capitulos.map((cap) => (
-                <div key={cap.id} className="space-y-2">
-                  <h3 className="font-sans font-bold text-base text-[#6C0053] uppercase border-b border-gray-200 pb-1">
-                    {cap.titulo}
-                  </h3>
-                  <div className="pt-1">
-                    <FormattedChapterContent content={cap.contenido} />
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Left Selector: 12 Annexes */}
+              <div className="lg:col-span-4 space-y-2">
+                <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#CCCCCC]/40">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3 px-1">
+                    Índice de Anexos Normativos (1 al 12)
+                  </h4>
+                  <div className="space-y-1.5 max-h-[680px] overflow-y-auto pr-1">
+                    {annexesList.map((anexo, idx) => (
+                      <button
+                        key={anexo.id || `anexo-${idx}`}
+                        type="button"
+                        onClick={() => setSelectedAnexoIndex(idx)}
+                        className={`w-full text-left p-3 rounded-xl text-xs transition-all flex items-start gap-2.5 ${
+                          selectedAnexoIndex === idx
+                            ? 'bg-[#6C0053] text-white font-bold shadow'
+                            : 'bg-gray-50 hover:bg-gray-100 text-[#424242]'
+                        }`}
+                      >
+                        <span className={`w-6 h-6 rounded-lg text-center flex items-center justify-center shrink-0 font-bold ${
+                          selectedAnexoIndex === idx
+                            ? 'bg-[#FFDCF9] text-[#6C0053]'
+                            : 'bg-gray-200 text-gray-700'
+                        }`}>
+                          {anexo.numero}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="truncate font-semibold">{anexo.titulo}</p>
+                          <span className={`text-[10px] block mt-0.5 ${
+                            selectedAnexoIndex === idx ? 'text-pink-200' : 'text-gray-500'
+                          }`}>
+                            {anexo.categoria || anexo.tipo}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
 
-            {/* Waste Inventory Table */}
-            <div className="space-y-3 pt-4 font-sans text-xs">
-              <h3 className="font-bold uppercase tracking-wide text-sm text-[#6C0053] border-b border-gray-200 pb-1">
-                Cuadro Resumen de Generación y Almacenamiento (NTP 900.058:2019)
-              </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse border border-gray-300 text-left">
-                  <thead>
-                    <tr className="bg-[#6C0053] text-white">
-                      <th className="border border-gray-300 p-2">N.°</th>
-                      <th className="border border-gray-300 p-2">Tipo</th>
-                      <th className="border border-gray-300 p-2">Categoría / Descripción</th>
-                      <th className="border border-gray-300 p-2">Gen. (kg/mes)</th>
-                      <th className="border border-gray-300 p-2">Color NTP</th>
-                      <th className="border border-gray-300 p-2">Destino Final</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {activePlan.residuos.map((res, i) => (
-                      <tr key={res.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="border border-gray-300 p-2 text-center">{i + 1}</td>
-                        <td className="border border-gray-300 p-2 font-semibold">{res.tipo}</td>
-                        <td className="border border-gray-300 p-2">{res.categoria}: {res.descripcion}</td>
-                        <td className="border border-gray-300 p-2 text-right">{res.generacionEstimadaKgMes} kg</td>
-                        <td className="border border-gray-300 p-2">{res.colorContenedorNtp}</td>
-                        <td className="border border-gray-300 p-2">{res.destinoFinal}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {/* Right Content: Selected Annex Viewer */}
+              <div className="lg:col-span-8">
+                {currentAnexo && (
+                  <div className="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-[#CCCCCC]/40 space-y-6">
+                    {/* Header of selected annex */}
+                    <div className="border-b border-gray-100 pb-5 space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-[#6C0053] bg-[#FFDCF9] px-3 py-1 rounded-full border border-[#6C0053]/20">
+                          {currentAnexo.codigo}
+                        </span>
+                        <span className="text-[11px] font-semibold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
+                          Fuente: {currentAnexo.fuenteNormativa || 'R.M. N.° 089-2023-MINAM'}
+                        </span>
+                      </div>
+                      <h4 className="text-lg sm:text-xl font-bold text-[#424242]">
+                        {currentAnexo.titulo}
+                      </h4>
+                      {currentAnexo.subtitulo && (
+                        <p className="text-xs font-medium text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
+                          {currentAnexo.subtitulo}
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-600 leading-relaxed pt-1">
+                        {currentAnexo.descripcion}
+                      </p>
+                    </div>
+
+                    {/* Table View of Annex Data */}
+                    {currentAnexo.columnas && currentAnexo.filas && currentAnexo.filas.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h5 className="text-xs font-bold uppercase tracking-wide text-gray-600 flex items-center gap-1.5">
+                            <Layers className="w-3.5 h-3.5 text-[#6C0053]" />
+                            <span>Contenido Normativo Fiel ({currentAnexo.filas.length} registros)</span>
+                          </h5>
+                          <span className="text-[11px] text-gray-400">
+                            Tipo: {currentAnexo.tipo}
+                          </span>
+                        </div>
+
+                        <div className="border border-gray-200 rounded-xl overflow-hidden shadow-xs">
+                          <div className="overflow-x-auto max-h-[500px]">
+                            <table className="w-full text-left text-xs border-collapse">
+                              <thead className="bg-[#6C0053] text-white sticky top-0 z-10">
+                                <tr>
+                                  {currentAnexo.columnas.map((col, cIdx) => (
+                                    <th key={cIdx} className="p-3 font-bold border-r border-[#850066] last:border-r-0 whitespace-nowrap">
+                                      {col}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-200 bg-white">
+                                {currentAnexo.filas.map((fila, rIdx) => {
+                                  const values = Object.values(fila);
+                                  return (
+                                    <tr key={rIdx} className="hover:bg-pink-50/40 transition-colors">
+                                      {values.map((val: any, vIdx) => (
+                                        <td key={vIdx} className="p-3 text-gray-700 border-r border-gray-100 last:border-r-0">
+                                          {typeof val === 'number' && val > 1000
+                                            ? `S/ ${val.toLocaleString('es-PE')}`
+                                            : String(val)}
+                                        </td>
+                                      ))}
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Plantilla Excel Oficial del MINAM si aplica para este Anexo */}
+                    {ANNEXES_RM_089[currentAnexo.numero] && (() => {
+                      const anexoConfig = ANNEXES_RM_089[currentAnexo.numero];
+                      const relatedCap = activePlan.capitulos.find(c => c.numero === anexoConfig.capituloNumero) || activePlan.capitulos[0];
+                      return (
+                        <div className="pt-2">
+                          <AnnexExcelUploadCard
+                            key={`anexo-upload-${currentAnexo.numero}`}
+                            annexConfig={anexoConfig}
+                            chapterTitle={relatedCap?.titulo || currentAnexo.titulo}
+                            chapterContent={relatedCap?.contenido || ''}
+                            companyName={activePlan.company.razonSocial}
+                            onUpdateContent={(newContent) => {
+                              if (relatedCap) {
+                                handleChapterContentChange(relatedCap.id, newContent);
+                              }
+                            }}
+                          />
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Signatures block */}
-            <div className="pt-16 grid grid-cols-2 gap-12 font-sans text-xs text-center">
-              <div className="space-y-8">
-                <div className="border-b border-gray-400 w-48 mx-auto"></div>
-                <p className="font-bold text-[#424242]">{activePlan.header.elaboradoPor}</p>
-                <p className="text-gray-500">Especialista Ambiental / Consultor</p>
-              </div>
-              <div className="space-y-8">
-                <div className="border-b border-gray-400 w-48 mx-auto"></div>
-                <p className="font-bold text-[#424242]">{activePlan.header.aprobadoPor}</p>
-                <p className="text-gray-500">Representante Legal / Gerencia</p>
-              </div>
-            </div>
-
-            {/* Document Bottom Copyright */}
-            <div className="pt-10 border-t border-gray-300 text-center font-sans text-xs text-gray-500 space-y-1">
-              <p className="font-bold text-[#424242]">
-                Elaborado y diseñado por Casa Altair - Equilibria (<a href="mailto:casa_altair@equilibria360.com" className="text-[#6C0053] underline hover:text-[#51003d]">casa_altair@equilibria360.com</a>). Lima, Perú — Setiembre de 2026
-              </p>
-              <p className="text-[11px] text-gray-400">
-                Conforme a la R.M. N.° 089-2023-MINAM, Decreto Legislativo N.° 1278 y NTP 900.058:2019
-              </p>
+            <div className="flex justify-between pt-4">
+              <button
+                onClick={() => setActiveTab('capitulos')}
+                className="bg-gray-100 text-[#424242] hover:bg-gray-200 px-6 py-3 rounded-xl font-bold text-sm"
+              >
+                Anterior: Capítulos (1 al 13)
+              </button>
+              <button
+                onClick={() => setActiveTab('preview')}
+                className="flex items-center gap-2 bg-[#70BA74] hover:bg-[#5da761] text-white px-6 py-3 rounded-xl font-bold text-sm shadow"
+              >
+                <span>Siguiente: Vista Previa & Reporte PDF</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
+        );
+      })()}
+
+      {/* TAB 6: VISTA PREVIA & PDF A4 */}
+      {activeTab === 'preview' && (
+        <div className="space-y-6">
+          {/* Document Preview: 3 Structured Sheets (Carátula, Datos Empresa, Capítulos) */}
+          {(() => {
+            const previewPlan = processPlanCuadros(activePlan);
+            const totalKg = previewPlan.residuos.reduce((acc, curr) => acc + (Number(curr.generacionEstimadaKgMes) || 0), 0);
+            const peligrososKg = previewPlan.residuos.filter(r => r.tipo === 'Peligroso').reduce((acc, curr) => acc + (Number(curr.generacionEstimadaKgMes) || 0), 0);
+            const noPeligrososKg = totalKg - peligrososKg;
+
+            return (
+              <div className="space-y-10 max-w-4xl mx-auto print-container">
+                {/* ==================== HOJA 1: CARÁTULA OFICIAL ==================== */}
+                <div className="bg-white rounded-2xl shadow-xl border border-[#CCCCCC] p-8 sm:p-14 relative flex flex-col justify-between min-h-[750px] text-center">
+                  <div>
+                    {/* Top Company Header */}
+                    <div className="border-b-2 border-[#6C0053] pb-6 mb-8 flex flex-col items-center">
+                      {previewPlan.header.logoUrl && (
+                        <img
+                          src={previewPlan.header.logoUrl}
+                          alt="Logotipo institucional"
+                          className="max-h-16 max-w-[120px] object-contain rounded mb-3"
+                        />
+                      )}
+                      <h2 className="text-base sm:text-lg font-sans font-bold text-gray-700 uppercase tracking-widest">
+                        {previewPlan.header.razonSocialHeader || previewPlan.company.razonSocial || 'EMPRESA TITULAR'}
+                      </h2>
+                    </div>
+
+                    {/* Title Block */}
+                    <div className="my-10 space-y-4">
+                      <span className="inline-block px-4 py-1.5 bg-emerald-50 text-[#70BA74] rounded-full text-xs font-bold uppercase tracking-widest border border-emerald-200">
+                        Instrumento Técnico de Gestión Ambiental
+                      </span>
+                      <h1 className="text-2xl sm:text-3xl font-extrabold uppercase text-[#6C0053] leading-tight">
+                        {previewPlan.header.tituloDocumento || 'PLAN DE MINIMIZACIÓN Y MANEJO DE RESIDUOS SÓLIDOS NO MUNICIPALES'}
+                      </h1>
+                      <div className="w-20 h-1 bg-[#6C0053] mx-auto rounded-full my-4"></div>
+                      <p className="text-xs sm:text-sm font-sans text-gray-600 max-w-2xl mx-auto leading-relaxed">
+                        Formulado conforme al contenido mínimo aprobado por la <strong>Resolución Ministerial N.° 089-2023-MINAM</strong>, en concordancia con el Decreto Legislativo N.° 1278 y su Reglamento D.S. N.° 014-2017-MINAM.
+                      </p>
+                    </div>
+
+                    {/* Highlights Card */}
+                    <div className="bg-pink-50/50 border border-pink-200/80 rounded-xl p-6 max-w-xl mx-auto text-left font-sans text-xs space-y-2 text-gray-800 shadow-xs">
+                      <p><strong>Empresa / Titular:</strong> {previewPlan.company.razonSocial}</p>
+                      <p><strong>R.U.C.:</strong> {previewPlan.company.ruc}</p>
+                      <p><strong>Establecimiento:</strong> {previewPlan.company.domicilio}</p>
+                      <p><strong>Ubicación:</strong> {previewPlan.company.distrito}, {previewPlan.company.provincia}, {previewPlan.company.departamento}</p>
+                      <p><strong>Actividad Económica:</strong> {previewPlan.company.actividadEconomica || previewPlan.company.sector}</p>
+                    </div>
+                  </div>
+
+                  {/* Metadata at bottom */}
+                  <div className="pt-8 border-t border-gray-200 font-sans text-xs text-gray-600 space-y-1.5">
+                    <p><strong>Elaborado por:</strong> {previewPlan.header.elaboradoPor || 'Responsable Técnico Ambiental'}</p>
+                    <p><strong>Aprobado por:</strong> {previewPlan.header.aprobadoPor || previewPlan.company.representanteLegal || 'Gerencia General'}</p>
+                    <p><strong>Periodo:</strong> {previewPlan.header.version || '2026-2027'} | <strong>Fecha:</strong> {previewPlan.header.fechaEmision}</p>
+                    <p className="text-gray-800 font-bold pt-1">Lima, Perú</p>
+                  </div>
+                </div>
+
+                {/* ==================== HOJA 2: DATOS DE LA EMPRESA ==================== */}
+                <div className="bg-white rounded-2xl shadow-xl border border-[#CCCCCC] p-8 sm:p-12 relative space-y-8 font-sans">
+                  <div className="border-b border-gray-200 pb-2">
+                    <span className="text-[11px] font-bold text-[#6C0053] uppercase tracking-wider">
+                      {previewPlan.company.razonSocial} — HOJA DE DATOS GENERALES (R.M. N.° 089-2023-MINAM)
+                    </span>
+                  </div>
+
+                  {/* Section 1: General Data */}
+                  <div className="space-y-4">
+                    <h3 className="font-bold uppercase tracking-wide text-sm text-[#6C0053] border-b-2 border-[#6C0053] pb-1.5">
+                      I. Datos Generales de la Empresa y Establecimiento
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5 text-xs text-gray-800 bg-pink-50/40 p-5 rounded-xl border border-pink-100">
+                      <p><strong>Razón Social:</strong> {previewPlan.company.razonSocial}</p>
+                      <p><strong>RUC:</strong> {previewPlan.company.ruc}</p>
+                      <p><strong>Nombre Comercial:</strong> {previewPlan.company.nombreComercial}</p>
+                      <p><strong>Domicilio Legal:</strong> {previewPlan.company.domicilio}</p>
+                      <p><strong>Ubicación:</strong> {previewPlan.company.distrito}, {previewPlan.company.provincia}, {previewPlan.company.departamento}</p>
+                      <p><strong>Representante Legal:</strong> {previewPlan.company.representanteLegal} (DNI: {previewPlan.company.dniRepresentante})</p>
+                      <p><strong>Sector:</strong> {previewPlan.company.sector}</p>
+                      <p><strong>Actividad / CIIU:</strong> {previewPlan.company.actividadEconomica}</p>
+                      <p><strong>Número de Trabajadores:</strong> {previewPlan.company.numeroTrabajadores} trab.</p>
+                      <p><strong>Horario de Operación:</strong> {previewPlan.company.horarioOperacion}</p>
+                      <p><strong>Teléfono:</strong> {previewPlan.company.telefonoContacto || 'No especificado'}</p>
+                      <p><strong>Correo Electrónico:</strong> {previewPlan.company.correoContacto || 'No especificado'}</p>
+                    </div>
+                  </div>
+
+                  {/* Waste Inventory Summary Table */}
+                  <div className="space-y-3 pt-2">
+                    <h3 className="font-bold uppercase tracking-wide text-sm text-[#6C0053] border-b-2 border-[#6C0053] pb-1.5">
+                      Resumen de Generación y Almacenamiento (NTP 900.058:2019)
+                    </h3>
+                    <p className="text-xs text-gray-600">
+                      Generación Total Estimada: <strong>{totalKg} kg/mes</strong> (No Peligrosos: <strong>{noPeligrososKg} kg/mes</strong> | Peligrosos: <strong>{peligrososKg} kg/mes</strong>).
+                    </p>
+                    <div className="overflow-x-auto rounded-xl border border-gray-300 shadow-2xs">
+                      <table className="w-full border-collapse text-left text-xs font-sans">
+                        <thead>
+                          <tr className="bg-[#6C0053] text-white">
+                            <th className="border border-[#51003d] p-2.5">N.°</th>
+                            <th className="border border-[#51003d] p-2.5">Tipo</th>
+                            <th className="border border-[#51003d] p-2.5">Categoría / Descripción</th>
+                            <th className="border border-[#51003d] p-2.5 text-right">Gen. (kg/mes)</th>
+                            <th className="border border-[#51003d] p-2.5">Color NTP</th>
+                            <th className="border border-[#51003d] p-2.5">Destino Final</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {previewPlan.residuos.map((res, i) => (
+                            <tr key={res.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/70 hover:bg-pink-50/30'}>
+                              <td className="border border-gray-200 p-2 text-center font-bold text-gray-500">{i + 1}</td>
+                              <td className={`border border-gray-200 p-2 font-bold ${res.tipo === 'Peligroso' ? 'text-red-700' : 'text-emerald-700'}`}>
+                                {res.tipo}
+                              </td>
+                              <td className="border border-gray-200 p-2">{res.categoria}: {res.descripcion}</td>
+                              <td className="border border-gray-200 p-2 text-right font-semibold">{res.generacionEstimadaKgMes} kg</td>
+                              <td className="border border-gray-200 p-2">{res.colorContenedorNtp}</td>
+                              <td className="border border-gray-200 p-2">{res.destinoFinal}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ==================== HOJA 3 EN ADELANTE: CAPÍTULOS ==================== */}
+                <div className="bg-white rounded-2xl shadow-xl border border-[#CCCCCC] p-8 sm:p-12 relative space-y-8 font-serif text-[#222222]">
+                  <div className="border-b border-gray-200 pb-2">
+                    <span className="text-[11px] font-sans font-bold text-[#6C0053] uppercase tracking-wider">
+                      {previewPlan.company.razonSocial} — CAPÍTULOS TÉCNICOS
+                    </span>
+                  </div>
+
+                  <h2 className="font-sans font-bold uppercase tracking-wide text-base text-[#6C0053] border-b-2 border-[#6C0053] pb-2">
+                    II. Capítulos del Plan de Minimización y Manejo de Residuos Sólidos
+                  </h2>
+
+                  {/* Chapters printed */}
+                  <div className="space-y-8 pt-2">
+                    {previewPlan.capitulos.map((cap) => (
+                      <div key={cap.id} className="space-y-3">
+                        <h3 className="font-sans font-bold text-sm text-[#6C0053] uppercase border-b border-pink-200 pb-1.5 flex items-center justify-between">
+                          <span>{cap.titulo}</span>
+                          <span className="text-[10px] font-normal text-gray-400">Capítulo {cap.numero}</span>
+                        </h3>
+                        <div className="pt-1">
+                          <FormattedChapterContent content={cap.contenido} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Signatures block */}
+                  <div className="pt-16 grid grid-cols-2 gap-12 font-sans text-xs text-center border-t border-gray-200">
+                    <div className="space-y-3">
+                      <div className="border-b border-gray-400 w-48 mx-auto"></div>
+                      <p className="font-bold text-[#424242]">{previewPlan.header.elaboradoPor || 'Especialista Ambiental'}</p>
+                      <p className="text-gray-500">Elaborado por (Responsable Técnico)</p>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="border-b border-gray-400 w-48 mx-auto"></div>
+                      <p className="font-bold text-[#424242]">{previewPlan.header.aprobadoPor || previewPlan.company.representanteLegal || 'Gerencia General'}</p>
+                      <p className="text-gray-500">Aprobado por (Representante Legal)</p>
+                    </div>
+                  </div>
+
+                  {/* Document Bottom Copyright */}
+                  <div className="pt-8 border-t border-gray-200 text-center font-sans text-xs text-gray-500 space-y-1">
+                    <p className="font-bold text-[#424242]">
+                      Elaborado y diseñado por Casa Altair - Equilibria (<a href="mailto:casa_altair@equilibria360.com" className="text-[#6C0053] underline hover:text-[#51003d]">casa_altair@equilibria360.com</a>). Lima, Perú — Setiembre de 2026
+                    </p>
+                    <p className="text-[11px] text-gray-400">
+                      Conforme a la R.M. N.° 089-2023-MINAM, Decreto Legislativo N.° 1278 y NTP 900.058:2019
+                    </p>
+                  </div>
+                </div>
+
+                {/* Bottom preview controls */}
+                <div className="flex flex-wrap items-center justify-between gap-4 pt-6 border-t border-gray-200">
+                  <button
+                    onClick={() => setActiveTab('capitulos')}
+                    className="bg-gray-100 text-[#424242] hover:bg-gray-200 px-5 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer"
+                  >
+                    ← Volver a Capítulos (1 al 13)
+                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handlePrint}
+                      className="flex items-center gap-1.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 px-4 py-2.5 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
+                      title="Abrir diálogo de impresión o guardar como PDF"
+                    >
+                      <Printer className="w-4 h-4 text-gray-600" />
+                      <span>Imprimir</span>
+                    </button>
+                    <button
+                      onClick={handleSavePdf}
+                      className="flex items-center gap-1.5 bg-[#6C0053] hover:bg-[#51003d] text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
+                      title="Descargar Plan en formato PDF A4"
+                    >
+                      <Download className="w-4 h-4 text-[#70BA74]" />
+                      <span>Descargar Plan</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

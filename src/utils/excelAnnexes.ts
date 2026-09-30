@@ -404,29 +404,43 @@ export async function parseExcelToMarkdownTable(file: File): Promise<ParsedExcel
 
 /**
  * Merges existing chapter narrative text with the exact uploaded Excel table.
- * Preserves the descriptive introductory text and appends/updates the complete formatted table.
+ * Conforms strictly to R.M. N.° 089-2023-MINAM format: "Cuadro XX - {Título limpio}"
+ * without "Cuadro Oficial", "Anexo N°", "(Ejemplo)" or "Datos cargados desde...".
  */
 export function mergeChapterNarrativeWithTable(
   existingContent: string,
   anexoNumero: number,
   markdownTable: string,
-  fileName: string
+  _fileName: string
 ): string {
   const anexoConfig = ANNEXES_RM_089[anexoNumero];
-  const tableTitleHeader = `### Cuadro Oficial — ${anexoConfig?.tituloAnexo || `Anexo ${anexoNumero}`} (R.M. N.° 089-2023-MINAM)`;
-  const fileSourceBadge = `> *Datos cargados desde archivo Excel: \`${fileName}\` (${new Date().toLocaleDateString('es-PE')})*`;
+  const rawTitle = anexoConfig?.tituloAnexo || `Estimación técnica de Anexo ${anexoNumero}`;
+  const cleanTitle = rawTitle
+    .replace(/^Anexo\s+N[°ºo]?\s*\d+\s*[:–-]\s*/i, '')
+    .replace(/^Cuadro\s+Oficial\s*[—–-]\s*/i, '')
+    .replace(/^Cuadro\s+(?:estimado|oficial)\s+de\s+/i, 'Estimado de ')
+    .replace(/\s*\(Ejemplo\)/gi, '')
+    .replace(/\s*\(R\.M\.?\s*N\.?[°ºo]?\s*089-2023-MINAM\)/gi, '')
+    .trim();
 
-  const newTableBlock = `${tableTitleHeader}\n${fileSourceBadge}\n\n${markdownTable}`;
+  const tableTitleHeader = `### Cuadro xx - ${cleanTitle}`;
+  const newTableBlock = `${tableTitleHeader}\n\n${markdownTable}`;
 
   if (!existingContent || existingContent.trim() === '') {
     return newTableBlock;
   }
 
-  // Check if an existing version of this Annex table already exists in the content
-  const regex = new RegExp(`### Cuadro Oficial — .*?Anexo\\s*${anexoNumero}[\\s\\S]*?(?=\\n###|$)`, 'i');
+  // Check if an existing version of this table or chapter cuadro already exists
+  const regex = new RegExp(`(?:###\\s*)?Cuadro\\s+(?:xxa?|\\d+|[A-Z0-9_-]+)\\s*[:–-][\\s\\S]*?Anexo\\s*${anexoNumero}[\\s\\S]*?(?=\\n###|$)`, 'i');
   if (regex.test(existingContent)) {
-    // Replace the previous table block with the updated one, keeping all surrounding narrative
     return existingContent.replace(regex, newTableBlock).trim();
+  }
+
+  // Also check if there's already a table matching clean title keywords
+  const titleKeywords = cleanTitle.split(' ').slice(0, 3).join('\\s+');
+  const keywordRegex = new RegExp(`(?:###\\s*)?Cuadro[\\s\\S]*?${titleKeywords}[\\s\\S]*?(?=\\n###|$)`, 'i');
+  if (keywordRegex.test(existingContent)) {
+    return existingContent.replace(keywordRegex, newTableBlock).trim();
   }
 
   // Otherwise, maintain narrative text and append table directly below

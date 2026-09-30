@@ -1,217 +1,79 @@
 import { PMMRSPlan, ReviewReport, ReviewStatus } from '../types';
 import { MASTER_REQUIREMENTS } from './normativaData';
 import { runSpecializedAudit } from '../utils/auditEngine';
+import { getModeloPlanFromFirestore } from '../services/firestoreService';
 
+// Caché en memoria del plan modelo obtenido desde Firebase Firestore ('modelo_plan')
+let cachedFirestoreDemoPlan: PMMRSPlan | null = null;
+
+export function setCachedDemoPlan(plan: PMMRSPlan) {
+  cachedFirestoreDemoPlan = plan;
+}
+
+export function getCachedDemoPlan(): PMMRSPlan | null {
+  return cachedFirestoreDemoPlan;
+}
+
+/**
+ * Carga el Plan Modelo Oficial fielmente desde la colección 'modelo_plan' en Firebase Firestore.
+ * El plan ya NO se encuentra quemado en el código fuente, sino que se recupera directamente de Firestore.
+ */
+export async function loadDemoPlanFromFirestore(): Promise<PMMRSPlan> {
+  if (cachedFirestoreDemoPlan && cachedFirestoreDemoPlan.capitulos?.length >= 13) {
+    return cachedFirestoreDemoPlan;
+  }
+  const plan = await getModeloPlanFromFirestore();
+  if (plan && plan.capitulos && plan.capitulos.length > 0) {
+    cachedFirestoreDemoPlan = plan;
+    return plan;
+  }
+  return DEMO_PLAN;
+}
+
+// Objeto base ligero para inicialización. El contenido completo (13 capítulos y 12 anexos oficiales de R.M. 089-2023-MINAM)
+// se obtiene dinámicamente desde la colección 'modelo_plan' en Firebase Firestore.
 export const DEMO_PLAN: PMMRSPlan = {
-  id: 'demo-plan-001',
-  titulo: 'Plan de Minimización y Manejo de Residuos Sólidos No Municipales 2026 - Planta Callao',
-  estado: 'Listo para revisión',
-  fechaCreacion: '2026-02-10',
-  fechaModificacion: '2026-09-20',
-  version: '1.0',
+  id: 'pmmrs-textiles-andina-2027',
+  titulo: 'Plan de Minimización y Manejo de Residuos Sólidos No Municipales - Textiles Andina S.A.C.',
+  estado: 'Finalizado',
+  fechaCreacion: '2027-01-15',
+  fechaModificacion: '2027-01-20',
+  version: 'Periodo de referencia: enero–diciembre 2027',
   company: {
-    razonSocial: 'Industrial Textil Andina S.A.C.',
+    razonSocial: 'Textiles Andina S.A.C.',
     ruc: '20548912341',
-    nombreComercial: 'Textil Andina',
-    domicilio: 'Av. Elmer Faucett N.° 3420, Urb. Industrial Colonial',
+    nombreComercial: 'Textiles Andina',
+    domicilio: 'Av. Elmer Faucett N.° 4520, Zona Industrial',
     departamento: 'Callao',
-    provincia: 'Callao',
+    provincia: 'Provincia Constitucional del Callao',
     distrito: 'Callao',
-    representanteLegal: 'Carlos Mendoza Alarcón',
+    representanteLegal: 'Ing. Carlos Mendoza Alarcón',
     dniRepresentante: '09876543',
-    actividadEconomica: 'Fabricación de tejidos y acabado de productos textiles',
-    sector: 'Manufactura e Industrial',
-    numeroTrabajadores: 120,
+    actividadEconomica: 'Fabricación, teñido, lavado y acabado de tejidos de algodón y mezclas (CIIU 1312 / 1313)',
+    sector: 'Industria Manufacturera / Subsector Textil (PRODUCE)',
+    numeroTrabajadores: 180,
     horarioOperacion: 'Lunes a Sábado de 07:00 a 17:00 horas (Doble turno)',
-    correoContacto: 'gestion.ambiental@textilandina.pe',
-    telefonoContacto: '(01) 567-8910'
+    correoContacto: 'gestionambiental@textilesandina.com.pe',
+    telefonoContacto: '(01) 452-9800'
   },
   header: {
     logoUrl: '',
-    razonSocialHeader: 'INDUSTRIAL TEXTIL ANDINA S.A.C.',
-    tituloDocumento: 'PLAN DE MINIMIZACIÓN Y MANEJO DE RESIDUOS SÓLIDOS NO MUNICIPALES (PMMRS)',
-    version: 'Versión 1.0 - 2026',
-    fechaEmision: 'Marzo de 2026',
-    elaboradoPor: 'Ing. María Elena Rengifo (CIP 145230)',
-    revisadoPor: 'Lic. Roberto Silva (Jefe de HSEQ)',
-    aprobadoPor: 'Carlos Mendoza Alarcón (Gerente General)'
+    razonSocialHeader: 'TEXTILES ANDINA S.A.C.',
+    tituloDocumento: 'PLAN DE MINIMIZACIÓN Y MANEJO DE RESIDUOS SÓLIDOS NO MUNICIPALES',
+    version: 'Periodo de referencia: enero–diciembre 2027',
+    fechaEmision: 'Enero 2027',
+    elaboradoPor: 'Jefe de Gestión Ambiental',
+    revisadoPor: 'Gerencia de Operaciones Industriales',
+    aprobadoPor: 'Gerencia General / Directorio'
   },
-  residuos: [
-    {
-      id: 'res-1',
-      tipo: 'No Peligroso',
-      categoria: 'Papel y Cartón',
-      descripcion: 'Recortes de embalaje, cajas de cartón y papeles de oficina',
-      estadoFisico: 'Sólido',
-      peligrosidad: ['Inerte'],
-      generacionEstimadaKgMes: 850,
-      almacenamiento: 'Almacén Central de Reciclaje',
-      colorContenedorNtp: 'Azul (Papel y Cartón)',
-      destinoFinal: 'Empresa EO-RS Recicla Perú S.A.C. para valorización',
-      minimizacionAccion: 'Reducción de empaques y reutilización de cajas de cartón'
-    },
-    {
-      id: 'res-2',
-      tipo: 'No Peligroso',
-      categoria: 'Plásticos',
-      descripcion: 'Film de polietileno, stretch film y bidones vacíos de insumos inocuos',
-      estadoFisico: 'Sólido',
-      peligrosidad: ['Inerte'],
-      generacionEstimadaKgMes: 420,
-      almacenamiento: 'Almacén Central de Reciclaje',
-      colorContenedorNtp: 'Blanco (Plástico)',
-      destinoFinal: 'Valorización mediante recicladores autorizados',
-      minimizacionAccion: 'Sustitución progresiva de film por fajado mecanizado'
-    },
-    {
-      id: 'res-3',
-      tipo: 'No Peligroso',
-      categoria: 'Orgánicos',
-      descripcion: 'Residuos de alimentos del comedor institucional',
-      estadoFisico: 'Semisólido',
-      peligrosidad: ['Putrescible'],
-      generacionEstimadaKgMes: 600,
-      almacenamiento: 'Contenedores herméticos en zona de cocina',
-      colorContenedorNtp: 'Marrón (Orgánicos)',
-      destinoFinal: 'Planta autorizada de compostaje o alimentación animal',
-      minimizacionAccion: 'Campañas de concientización para evitar desperdicio de alimentos'
-    },
-    {
-      id: 'res-4',
-      tipo: 'Peligroso',
-      categoria: 'Aceites y Grasas Usadas',
-      descripcion: 'Aceites lubricantes residuales de maquinaria de tejeduría',
-      estadoFisico: 'Sólido',
-      peligrosidad: ['Inflamable', 'Tóxico acuático'],
-      generacionEstimadaKgMes: 150,
-      almacenamiento: 'Almacén Temporal de Residuos Peligrosos (ATRP)',
-      colorContenedorNtp: 'Rojo (Peligrosos)',
-      destinoFinal: 'Disposición y tratamiento por EO-RS EcoSafe Perú',
-      minimizacionAccion: 'Optimización de periodos de lubricación preventiva'
-    },
-    {
-      id: 'res-5',
-      tipo: 'Peligroso',
-      categoria: 'Paños y Materiales Contaminados',
-      descripcion: 'Traperos, guaipe y envases con trazas de tintes y solventes',
-      estadoFisico: 'Sólido',
-      peligrosidad: ['Tóxico', 'Inflamable'],
-      generacionEstimadaKgMes: 90,
-      almacenamiento: 'Almacén Temporal de Residuos Peligrosos (ATRP)',
-      colorContenedorNtp: 'Rojo (Peligrosos)',
-      destinoFinal: 'Celda de seguridad de relleno autorizado',
-      minimizacionAccion: 'Uso de dosificadores para evitar impregnación excesiva'
-    },
-    {
-      id: 'res-6',
-      tipo: 'No Peligroso',
-      categoria: 'Retazos Textiles',
-      descripcion: 'Mermas y orillos de corte de tela de algodón y fibras sintéticas',
-      estadoFisico: 'Sólido',
-      peligrosidad: ['Inerte'],
-      generacionEstimadaKgMes: 150,
-      almacenamiento: 'Almacén Central de Reciclaje',
-      colorContenedorNtp: 'Blanco (Plástico/Textil)',
-      destinoFinal: 'Valorización material mediante hilanderías recicladoras autorizadas',
-      minimizacionAccion: 'Optimización de trazos mediante software CAD/CAM de corte'
-    }
-  ],
-  capitulos: [
-    {
-      id: 'cap-1',
-      numero: 1,
-      titulo: '1. Introducción',
-      contenido: '1.1 Planteamiento del Problema:\nEl presente Plan de Minimización y Manejo de Residuos Sólidos No Municipales (PMMRS) responde a la necesidad técnica y ambiental de gestionar de manera integral y segura los residuos sólidos generados en las operaciones continuas de manufactura textil. Durante los procesos productivos de hilatura, tejeduría circular, tintorería industrial, acabado textil y corte automatizado, así como en las actividades auxiliares de mantenimiento electromecánico y áreas comunes, se genera un volumen mensual estimado de 2,260.00 kg de residuos sólidos. De este total, 2,020.00 kg/mes corresponden a residuos no peligrosos (mermas textiles, bobinas, cartón corrugado, plásticos de empaque y orgánicos de comedor) y 240.00 kg/mes corresponden a residuos sólidos peligrosos - RESPEL (aceites lubricantes usados, trapos impregnados con hidrocarburos y envases de productos químicos). La ausencia de una gestión sistematizada generaría riesgos significativos de afectación ambiental, riesgos laborales en planta y contingencias sancionatorias ante las autoridades fiscalizadoras competentes.\n\n1.2 Abordaje del Problema con el Plan:\nFrente a dicha problemática, el presente Plan aborda la gestión de residuos bajo un enfoque preventivo y de economía circular, conforme a los mandatos del Decreto Legislativo N.° 1278 (Ley de Gestión Integral de Residuos Sólidos), su Reglamento aprobado por D.S. N.° 014-2017-MINAM y la Resolución Ministerial N.° 089-2023-MINAM. La estrategia se sustenta en tres ejes fundamentales: 1) Prevención y minimización en la fuente mediante optimización tecnológica de patrones de corte con software CAD/CAM e implementación de bobinas retornables; 2) Segregación estandarizada en 18 estaciones bajo el código de colores de la NTP 900.058:2019 y acondicionamiento seguro en un Almacén Temporal de Residuos Peligrosos (ATRP) dotado de dique de contención estanco al 110%; y 3) Articulación formal con Empresas Operadoras de Residuos Sólidos (EO-RS) registradas ante el MINAM para la valorización material del 64.35% de los residuos aprovechables y la disposición final controlada de los residuos peligrosos, garantizando trazabilidad documentaria mediante manifiestos (MMRP) y declaración oficial en SIGERSOL-SNM.',
-      completado: true
-    },
-    {
-      id: 'cap-2',
-      numero: 2,
-      titulo: '2. Objetivos',
-      contenido: '2.1 Objetivo General: Garantizar el aprovechamiento sostenible de recursos e insumos textiles, optimizar las operaciones de manufactura en planta y asegurar la gestión integral, segura y ambientalmente adecuada de los residuos sólidos no municipales generados en las instalaciones de la planta Callao, priorizando la prevención y minimización en la fuente bajo el Principio de Economía Circular.\n\n2.2 Objetivos Específicos:\n- Reducir en 8.5% anual la generación de mermas textiles y desechos de corte en las líneas de tejeduría y confección.\n- Alcanzar y sostener una tasa de valorización material superior al 60% mensual respecto al total de residuos no peligrosos generados.\n- Implementar y mantener al 100% el sistema de segregación estandarizada en la fuente conforme al código de colores de la NTP 900.058:2019.\n- Acondicionar y custodiar al 100% los residuos sólidos peligrosos (RESPEL) dentro del Almacén Temporal (ATRP) dotado de dique de contención estanco al 110%.\n- Garantizar que el 100% del transporte externo, valorización y disposición final sea ejecutado por Empresas Operadoras de Residuos Sólidos (EO-RS) registradas ante el MINAM, emitiendo los Manifiestos de Manejo de Residuos Peligrosos (MMRP).',
-      completado: true
-    },
-    {
-      id: 'cap-3',
-      numero: 3,
-      titulo: '3. Alcance',
-      contenido: 'El presente Plan de Minimización y Manejo de Residuos Sólidos No Municipales tiene alcance vinculante sobre la totalidad del predio industrial de 8,500 m² de la planta Callao de Industrial Textil Andina S.A.C., abarcando de manera integral:\n\n1) Áreas Productivas: Naves de Urdido y Enconado, Sala de Telares Circulares y Rectilíneos, Sección de Tintorería y Fijación Térmica, Sala de Corte Automatizado y Ensamble.\n2) Áreas Auxiliares y Soporte: Taller de Mantenimiento Electromecánico, Calderas y Tratamiento de Agua, Almacén Central de Materias Primas, Almacén de Químicos y Colorantes, y Almacén de Producto Terminado.\n3) Áreas de Acondicionamiento de Residuos: 18 Estaciones de Segregación Primaria distribuidas en planta, Almacén Central de Aprovechables de 50 m², y Almacén Temporal de Residuos Peligrosos (ATRP) de 35 m².\n4) Áreas Administrativas y de Servicios al Personal: Oficinas de Gerencia y Administración, Comedor Laboral, Vestuarios y Garita de Control.\n\nAplica a una dotación permanente de 120 trabajadores bajo régimen laboral de doble turno (Lunes a Sábado de 07:00 a 17:00 horas), así como a contratistas y visitantes temporales.',
-      completado: true
-    },
-    {
-      id: 'cap-4',
-      numero: 4,
-      titulo: '4. Identificación, características y estimación de residuos sólidos',
-      contenido: 'Conforme al Estudio de Caracterización de Residuos Sólidos No Municipales realizado en planta en condiciones normales de operación, la generación promedio mensual asciende a 2,260.00 kg/mes (equivalente a 27.12 t/año), desglosada técnicamente en:\n\na) Residuos No Peligrosos (2,020.00 kg/mes - 89.38% del total):\n- Papel y Cartón (850.00 kg/mes): Cajas de embalaje corrugado, bobinas desocupadas y material de empaque (Inerte, no peligroso).\n- Plásticos (420.00 kg/mes): Stretch film, zunchos de polipropileno y envolturas de polietileno de baja densidad (Inerte valorizable).\n- Residuos Orgánicos (600.00 kg/mes): Restos de alimentos crudos y cocidos provenientes del comedor laboral (Putrescible).\n- Retazos Textiles (150.00 kg/mes): Retazos limpios de algodón pima y mezclas sintéticas (Inerte valorizable).\n\nb) Residuos Peligrosos - RESPEL (240.00 kg/mes - 10.62% del total):\n- Aceites lubricantes usados de maquinaria (150.00 kg/mes - Código B0190 Anexo III D.S. 014-2017-MINAM, Líquido inflamable/tóxico).\n- Paños, guaipe y envases con restos de solventes y colorantes (90.00 kg/mes - Código A4140, Sólido inflamable/tóxico).\n\nBalance de Materia y Entradas/Salidas: Por cada 1,000 kg de hilo procesado, se generan 75 kg de residuos totales (67 kg no peligrosos y 8 kg RESPEL). Cada corriente cuenta con registro diario en bitácora de pesaje con balanza industrial calibrada para sustentar la Declaración Anual en SIGERSOL-SNM del MINAM.',
-      completado: true
-    },
-    {
-      id: 'cap-5',
-      numero: 5,
-      titulo: '5. Estrategias para la prevención y/o minimización',
-      contenido: 'En cumplimiento del Principio de Economía Circular y la Jerarquía de Gestión de Residuos del D.L. N.° 1278 (Art. 19), se han implementado estrategias operativas medibles:\n\n1) Medidas de Minimización en Origen:\n- Optimización de patrones de corte mediante software CAD/CAM que reduce el desperdicio textil en 8.5% anual.\n- Sustitución de conos desechables de un solo uso por bobinas plásticas retornables con hilanderías proveedoras en circuito cerrado (evitando 3.6 t/año de residuos de empaque).\n- Implementación de lubricación automática por micropulverización para alargar los ciclos de recambio de aceite de telares en un 25%.\n- Sustitución progresiva de solventes clorados por desengrasantes acuosos biodegradables en mantenimiento.\n\n2) Medidas de Valorización Material:\n- Segregación estandarizada en origen que permite la entrega del 100% de cartón corrugado, stretch film y retazos textiles a Empresas Operadoras de Residuos Sólidos (EO-RS) debidamente autorizadas para reciclaje industrial y regeneración de fibras, alcanzando una tasa de valorización global de residuos no peligrosos del 64.35% mensual (1,300 kg/mes valorizados sobre 2,020 kg generados).\n\n3) Valorización Orgánica:\n- Convenio de entrega de 600 kg/mes de residuos orgánicos del comedor a planta de compostaje autorizada para la producción de enmiendas agronómicas.',
-      completado: true
-    },
-    {
-      id: 'cap-6',
-      numero: 6,
-      titulo: '6. Gestión y manejo de residuos sólidos',
-      contenido: 'El manejo físico de residuos comprende las siguientes etapas operativas:\n\n1) Segregación en la Fuente: Estaciones de segregación con código de colores según NTP 900.058:2019 (Azul: Papel/Cartón, Blanco: Plásticos, Marrón: Orgánicos, Rojo: Peligrosos).\n\n2) Almacenamiento Central de No Peligrosos: Área de 50 m², techada, ventilada, delimitada y señalizada con piso de concreto pulido.\n\n3) Almacén Temporal de Residuos Peligrosos (ATRP): Recinto confinado e impermeabilizado de 35 m², piso con recubrimiento epóxico de alta resistencia química, dique de contención estanco perimetral con capacidad para 1,200 litros (superando el 110% del contenedor mayor de 200 litros), señalética de seguridad conforme a NFPA 704 y CTI, kit antiderrames homologado de 55 galones (cordones absorbentes, almohadillas y pala antichispas), extintor PQS de 12 kg y Hojas de Datos de Seguridad (FDS/MSDS) en idioma castellano.\n\n4) Recolección y Transporte Interno: Rutas internas señalizadas y horarios de traslado que evitan la interferencia con materias primas y productos limpios.\n\n5) Recolección Externa, Transporte y Disposición Final: Ejecutado exclusivamente por Empresas Operadoras de Residuos Sólidos (EO-RS) registradas y autorizadas ante el MINAM: EcoSafe Perú S.A.C. (Registro MINAM N.° EO-RS-0024-20) para el transporte y disposición final de RESPEL en celda de seguridad autorizada con emisión de Manifiestos de Manejo de Residuos Peligrosos (MMRP), y Recicla Perú S.A.C. para valorización de reciclables.',
-      completado: true
-    },
-    {
-      id: 'cap-7',
-      numero: 7,
-      titulo: '7. Descripción de las medidas ambientales',
-      contenido: 'Se ejecutan medidas de prevención, control y mitigación ambiental en todas las fases del manejo de residuos sólidos:\n\n1) Control de Lixiviados y Efluentes: Pisos impermeabilizados con resina epóxica en almacenes centrales y dique estanco en el ATRP, impidiendo cualquier infiltración de hidrocarburos o sustancias químicas al suelo o red de alcantarillado.\n2) Control de Vectores y Plagas: Retiro de residuos orgánicos del comedor cada 48 horas en contenedores herméticos de polietileno de alta densidad (HDPE) con pedal, y fumigación/desinfección técnica semanal a cargo de empresa de saneamiento ambiental acreditada por MINSA/DIGESA.\n3) Control de Olores y Emisiones de Vapores: Almacén de residuos orgánicos confinado con extracción de aire; y ATRP con sistema de ventilación cruzada natural y extracción forzada a prueba de chispas (antiexplosiva) para evitar la acumulación de Compuestos Orgánicos Volátiles (COVs).\n4) Control de Ruido y Emisiones de Unidades de Transporte: Mantenimiento electromecánico preventivo mensual de transpaletas y vehículos de acarreo interno para cumplir con el D.S. N.° 085-2003-PCM.',
-      completado: true
-    },
-    {
-      id: 'cap-8',
-      numero: 8,
-      titulo: '8. Medidas de atención ante emergencias',
-      contenido: 'El Plan de Contingencia y Respuesta ante Emergencias de Residuos Sólidos establece Procedimientos Operativos Estandarizados (POE):\n\n1) POE-01: Respuesta Rápida ante Derrames de Sustancias Químicas y Aceites Usados:\n- Fase 1 (Detección y Evacuación): Detener la fuente si es seguro, aislar el área en un radio de 5 metros y alertar al Jefe de Brigada.\n- Fase 2 (Contención): Desplegar cordones absorbentes oleofílicos del kit antiderrames de 55 galones alrededor del derrame para confinar el fluido.\n- Fase 3 (Absorción y Neutralización): Colocar almohadillas absorbentes y material absorbente particulado (turba o vermiculita).\n- Fase 4 (Recojo y Disposición): Recoger el material saturado con palas antichispas y confinarlo en tambores rojos rotulados como RESPEL.\n\n2) POE-02: Respuesta ante Amagos de Incendio en Almacenes:\n- Uso inmediato de extintores PQS de 12 kg (Polvo Químico Seco ABC) y CO2 de 10 lbs instalados junto a las puertas de acceso.\n\n3) Recursos y Brigadas: Brigada de emergencias ambientales de 12 trabajadores capacitados y equipados con EPPs nivel C (guantes de nitrilo, botas de neopreno, gafas de seguridad y respiradores con cartuchos para vapores orgánicos). Notificación inmediata a la Gerencia y reporte a OEFA dentro del plazo improrrogable de 24 horas.',
-      completado: true
-    },
-    {
-      id: 'cap-9',
-      numero: 9,
-      titulo: '9. Indicadores de seguimiento y control',
-      contenido: 'Tablero de Control de Indicadores de Ecoeficiencia y Desempeño Ambiental (R.M. 089-2023-MINAM):\n\n1) Ratio de Generación Específica (Rg): Rg = (kg total residuos generados / kg producto acabado fabricado) = Meta mensual < 0.075 kg/kg.\n2) Porcentaje de Valorización Material (%V): %V = (kg residuos no peligrosos valorizados / kg residuos no peligrosos totales) * 100 = Meta mensual >= 60.00% (Actual: 64.35%).\n3) Ratio de Generación de Peligrosos (Rpel): Rpel = (kg RESPEL generados / kg producto fabricado) * 100 = Meta mensual < 1.10% (Actual: 0.80%).\n4) Índice de Segregación Correcta (%S): %S = (N.° inspecciones conformes en estaciones NTP 900.058 / N.° total de inspecciones) * 100 = Meta >= 95.00%.\n5) Tasa de Cumplimiento de Cronograma (%TC): (Actividades ejecutadas / programadas) * 100 = Meta 100%.\n\nMonitoreo y Reporte: Control semanal en bitácora foliada, consolidación mensual en informe de HSEQ y carga oficial en la plataforma SIGERSOL No Municipal del MINAM.',
-      completado: true
-    },
-    {
-      id: 'cap-10',
-      numero: 10,
-      titulo: '10. Cronograma de implementación',
-      contenido: 'Cronograma Anual de Implementación y Operación (Gantt 12 meses - 2026):\n\n- Meses 1 a 12 (Continuo): Pesaje diario y segregación en las 18 estaciones de planta según NTP 900.058:2019.\n- Quincenal (24 retiros/año): Recolección externa de residuos aprovechables (cartón, film, retazos) por EO-RS Recicla Perú S.A.C.\n- Trimestral (Meses 3, 6, 9 y 12): Retiro y transporte de residuos peligrosos (aceites y solventes) por EO-RS EcoSafe Perú S.A.C. con Manifiestos MMRP.\n- Trimestral (Meses 2, 5, 8 y 11): Mantenimiento preventivo del ATRP, verificación de diques y reposición de insumos de kits antiderrames.\n- Trimestral (Meses 3, 6, 9 y 11): Ejecución de módulos del Programa Anual de Capacitación y simulacros de emergencia ambiental.\n- Mes 3 (Marzo 2026): Elaboración y presentación de la Declaración Anual de Manejo de Residuos Sólidos en el portal SIGERSOL-SNM del MINAM.\n- Mes 6 y 12 (Junio y Diciembre): Auditorías internas de seguimiento ambiental y balance de KPIs.',
-      completado: true
-    },
-    {
-      id: 'cap-11',
-      numero: 11,
-      titulo: '11. Presupuesto y recursos necesarios',
-      contenido: 'Presupuesto Anual Formal Aprobado por la Gerencia General (Total: S/ 45,000.00 anuales):\n\n- Partida 1: Servicios de recolección, transporte y disposición final/valorización con EO-RS autorizadas: S/ 22,500.00 anuales.\n- Partida 2: Mantenimiento, impermeabilización y señalización del Almacén Central y ATRP (incluye inspección de dique): S/ 8,500.00 anuales.\n- Partida 3: Renovación de contenedores normalizados bajo NTP 900.058:2019, rotulado y dotación de EPPs específicos: S/ 6,000.00 anuales.\n- Partida 4: Programa anual de capacitaciones, materiales didácticos y simulacros de contingencia con kit antiderrames: S/ 4,000.00 anuales.\n- Partida 5: Estudio de caracterización técnica anual, pesaje calibrado y auditoría de seguimiento ambiental: S/ 4,000.00 anuales.\n\nRecursos Humanos Asignados: 1 Ingeniero Ambiental / Jefe HSEQ dedicado a la supervisión técnica, 2 operarios líderes de segregación y 12 brigadistas de emergencia.',
-      completado: true
-    },
-    {
-      id: 'cap-12',
-      numero: 12,
-      titulo: '12. Funciones del responsable de la gestión y manejo de residuos sólidos',
-      contenido: 'Se designa formalmente al Ingeniero Ambiental / Jefe de HSEQ (Ing. Miguel Ángel Torres, CIP N.° 184520) como Responsable Oficial de la Gestión y Manejo de Residuos Sólidos No Municipales de Industrial Textil Andina S.A.C., con las siguientes funciones y responsabilidades:\n\n1) Supervisión Técnica y Operativa: Supervisar diariamente el cumplimiento de la segregación en origen bajo la NTP 900.058:2019 y el estado del ATRP.\n2) Control Documentario y Trazabilidad: Custodiar el libro de bitácora de pesaje diario y los Manifiestos de Manejo de Residuos Sólidos Peligrosos (MMRP) firmados por las EO-RS.\n3) Coordinación con EO-RS: Coordinar las órdenes de recojo con las empresas operadoras y verificar semestralmente la vigencia de sus autorizaciones ante MINAM.\n4) Reporte Oficial ante el Estado: Elaborar, suscribir y presentar la Declaración Anual de Manejo de Residuos Sólidos en la plataforma SIGERSOL No Municipal.\n5) Capacitación Continua: Planificar y ejecutar el Programa Anual de Capacitación Ambiental para el personal operativo y administrativo.\n6) Liderazgo en Contingencias: Dirigir las acciones de contención inmediata ante cualquier derrame o incidente ambiental con RESPEL.',
-      completado: true
-    },
-    {
-      id: 'cap-13',
-      numero: 13,
-      titulo: '13. Anexos',
-      contenido: 'El presente Plan incluye los siguientes anexos técnicos y administrativos que forman parte indivisible del documento:\n\n- Anexo 1: Plano General de Planta (Escala 1:500) con zonificación de naves productivas, ubicación geográfica de las 18 estaciones de segregación y localización del ATRP y Almacén Central.\n- Anexo 2: Diagrama de Flujo de Procesos de Manufactura Textil con balance de materia y mapeo de fuentes de generación de residuos sólidos.\n- Anexo 3: Hojas de Datos de Seguridad (FDS / MSDS) de los insumos químicos, tintes y aceites lubricantes utilizados en planta.\n- Anexo 4: Resoluciones Directorales y Constancias de Registro Vigente ante el MINAM de las EO-RS contratadas (EcoSafe Perú S.A.C. y Recicla Perú S.A.C.).\n- Anexo 5: Formato Oficial de Bitácora de Registro Diario de Pesaje y Modelo de Manifiesto de Manejo de Residuos Sólidos Peligrosos (MMRP).\n- Anexo 6: Programa Anual de Capacitación y Sensibilización en Gestión Integral de Residuos Sólidos 2026.',
-      completado: true
-    }
-  ],
-  presupuestoTotal: 45000,
+  residuos: [],
+  capitulos: [],
+  anexos: [],
+  presupuestoTotal: 139000,
   esDemo: true
 };
+
+export const MODELO_PLAN_OFICIAL = DEMO_PLAN;
 
 export const DEMO_REVIEW_REPORT: ReviewReport = {
   id: 'rev-rep-001',

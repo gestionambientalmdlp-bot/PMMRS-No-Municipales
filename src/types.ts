@@ -51,6 +51,21 @@ export interface InstitutionalHeader {
   aprobadoPor: string;
 }
 
+export interface PlanAnexo {
+  id: string;
+  numero: number;
+  codigo: string;
+  titulo: string;
+  subtitulo?: string;
+  categoria: string;
+  tipo: 'diagrama' | 'tabla' | 'matriz' | 'documento' | 'jerarquia';
+  descripcion: string;
+  columnas?: string[];
+  filas?: any[];
+  contenidoTexto?: string;
+  fuenteNormativa?: string;
+}
+
 export interface PMMRSPlan {
   id: string;
   titulo: string;
@@ -62,6 +77,7 @@ export interface PMMRSPlan {
   header: InstitutionalHeader;
   residuos: WasteItem[];
   capitulos: PlanChapter[];
+  anexos?: PlanAnexo[];
   presupuestoTotal: number;
   esDemo: boolean;
 }

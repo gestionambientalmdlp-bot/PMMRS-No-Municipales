@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { FolderArchive, FileText, CheckCircle2, Download, Trash2, ArrowRight, Sparkles } from 'lucide-react';
 import { PMMRSPlan, ReviewReport } from '../types';
-import { DEMO_PLAN, DEMO_REVIEW_REPORT } from '../data/demoData';
 import { downloadJsonFile } from '../utils/printReport';
 
 interface DocumentosGuardadosViewProps {

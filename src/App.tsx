@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Mail } from 'lucide-react';
+import { Mail, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 import { AppView, PMMRSPlan, ReviewReport } from './types';
-import { DEMO_PLAN, DEMO_REVIEW_REPORT, createBlankPlan, createBlankReviewReport } from './data/demoData';
+import { loadDemoPlanFromFirestore, createBlankPlan, createBlankReviewReport } from './data/demoData';
+import { runSpecializedAudit } from './utils/auditEngine';
 import { downloadJsonFile } from './utils/printReport';
 import { saveDraftToLocalStorage } from './utils/draftStorage';
 import { Sidebar } from './components/Sidebar';
@@ -20,10 +21,49 @@ export default function App() {
   const [activePlan, setActivePlan] = useState<PMMRSPlan>(() => createBlankPlan());
   const [reviewReport, setReviewReport] = useState<ReviewReport>(() => createBlankReviewReport());
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [demoLoadState, setDemoLoadState] = useState<{
+    loading: boolean;
+    message: string | null;
+    type: 'success' | 'error' | 'info';
+  }>({ loading: false, message: null, type: 'info' });
 
-  const loadDemoData = () => {
-    setActivePlan(DEMO_PLAN);
-    setReviewReport(DEMO_REVIEW_REPORT);
+  const loadDemoData = async () => {
+    setDemoLoadState({
+      loading: true,
+      message: 'Conectando a Firebase Firestore y cargando el Plan Modelo Oficial (13 capítulos y 12 anexos)...',
+      type: 'info'
+    });
+    try {
+      const planFromFirestore = await loadDemoPlanFromFirestore();
+      if (planFromFirestore && planFromFirestore.capitulos && planFromFirestore.capitulos.length > 0) {
+        setActivePlan(planFromFirestore);
+        saveDraftToLocalStorage(planFromFirestore);
+        const report = runSpecializedAudit(planFromFirestore);
+        setReviewReport(report);
+        setDemoLoadState({
+          loading: false,
+          message: `¡Plan Modelo Oficial cargado fielmente desde Firebase Firestore! Empresa: ${planFromFirestore.company.razonSocial || 'Textiles Andina S.A.C.'} (${planFromFirestore.capitulos.length} capítulos y ${planFromFirestore.anexos?.length || 12} anexos oficiales R.M. 089-2023-MINAM).`,
+          type: 'success'
+        });
+      } else {
+        setDemoLoadState({
+          loading: false,
+          message: 'No se encontraron datos en la colección "modelo_plan" de Firestore.',
+          type: 'error'
+        });
+      }
+    } catch (err: any) {
+      console.error('Error al cargar demo de Firestore:', err);
+      setDemoLoadState({
+        loading: false,
+        message: 'Error al consultar la colección en Firebase Firestore: ' + (err.message || 'Verifique la conexión'),
+        type: 'error'
+      });
+    } finally {
+      setTimeout(() => {
+        setDemoLoadState(prev => ({ ...prev, message: null }));
+      }, 6000);
+    }
   };
 
   const resetToBlank = () => {
@@ -47,6 +87,39 @@ export default function App() {
   return (
     <FirestoreProvider>
       <div className="min-h-screen bg-[#f8f9fa] flex flex-col lg:flex-row font-sans text-[#424242]">
+        {/* Toast Notificación de Carga de Demo desde Firebase */}
+        {demoLoadState.message && (
+          <div className="fixed top-4 right-4 z-50 max-w-md animate-in slide-in-from-top-2 duration-300">
+            <div className={`p-4 rounded-2xl shadow-xl border flex items-start gap-3 ${
+              demoLoadState.loading
+                ? 'bg-[#FFDCF9] border-[#6C0053]/40 text-[#6C0053]'
+                : demoLoadState.type === 'success'
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                : 'bg-red-50 border-red-300 text-red-900'
+            }`}>
+              {demoLoadState.loading ? (
+                <Loader2 className="w-5 h-5 animate-spin text-[#6C0053] shrink-0 mt-0.5" />
+              ) : demoLoadState.type === 'success' ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+              )}
+              <div className="flex-1 text-xs">
+                <p className="font-bold text-sm mb-0.5">
+                  {demoLoadState.loading ? 'Firebase Firestore' : demoLoadState.type === 'success' ? 'Plan Modelo Oficial' : 'Aviso de Conexión'}
+                </p>
+                <p>{demoLoadState.message}</p>
+              </div>
+              <button
+                onClick={() => setDemoLoadState(prev => ({ ...prev, message: null }))}
+                className="text-gray-400 hover:text-gray-600 text-xs font-bold"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Sidebar Navigation */}
         <Sidebar
           currentView={currentView}

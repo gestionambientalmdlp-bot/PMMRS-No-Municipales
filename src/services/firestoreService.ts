@@ -1,6 +1,7 @@
 import { 
   collection, 
   doc, 
+  getDoc,
   getDocs, 
   setDoc, 
   addDoc, 
@@ -13,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { MASTER_REQUIREMENTS, NORMATIVE_DOCUMENTS } from '../data/normativaData';
+import { PMMRSPlan } from '../types';
 
 export interface ContenidoMinimoItem {
   id: string;
@@ -54,6 +56,7 @@ export interface MarcoNormativoItem {
 
 export const CONTENIDO_MINIMO_COLLECTION = 'contenido_minimo';
 export const MARCO_NORMATIVO_COLLECTION = 'marco_normativo';
+export const MODELO_PLAN_COLLECTION = 'modelo_plan';
 
 // Mapeo inicial de Códigos de Marco Normativo
 const DEFAULT_NORMA_CODES: Record<string, string> = {
@@ -352,4 +355,83 @@ export async function seedMarcoNormativo(forceOverwrite = false): Promise<number
   }
 
   return count;
+}
+
+/**
+ * Obtiene el plan modelo oficial desde la colección 'modelo_plan' de Firestore
+ */
+export async function getModeloPlanFromFirestore(): Promise<PMMRSPlan | null> {
+  try {
+    const mainDocRef = doc(db, MODELO_PLAN_COLLECTION, 'pmmrs_textiles_andina_2027');
+    const snap = await getDoc(mainDocRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      return {
+        id: data.id || 'pmmrs-textiles-andina-2027',
+        titulo: data.titulo || 'Plan de Minimización y Manejo de Residuos Sólidos No Municipales',
+        estado: data.estado || 'Finalizado',
+        fechaCreacion: data.fechaCreacion || '2027-01-15',
+        fechaModificacion: data.fechaModificacion || '2027-01-20',
+        version: data.version || 'Periodo de referencia: enero–diciembre 2027',
+        company: data.company || {},
+        header: data.header || {},
+        residuos: data.residuos || [],
+        capitulos: data.capitulos || [],
+        anexos: data.anexos || [],
+        presupuestoTotal: data.presupuestoTotal || 139000,
+        esDemo: true
+      } as PMMRSPlan;
+    }
+
+    // Si no está con ese ID exacto, buscar en la colección modelo_plan
+    const colSnap = await getDocs(collection(db, MODELO_PLAN_COLLECTION));
+    for (const d of colSnap.docs) {
+      if (d.id !== 'info' && !d.id.startsWith('capitulo_') && !d.id.startsWith('anexo_')) {
+        const data = d.data();
+        if (data.capitulos && data.capitulos.length > 0) {
+          return {
+            ...data,
+            id: data.id || d.id,
+            anexos: data.anexos || [],
+            esDemo: true
+          } as PMMRSPlan;
+        }
+      }
+    }
+    return null;
+  } catch (err) {
+    console.error('Error al obtener modelo_plan desde Firestore:', err);
+    return null;
+  }
+}
+
+/**
+ * Escucha en tiempo real el plan modelo oficial desde Firestore ('modelo_plan')
+ */
+export function subscribeModeloPlan(
+  onData: (plan: PMMRSPlan | null) => void,
+  onError?: (err: Error) => void
+) {
+  try {
+    const mainDocRef = doc(db, MODELO_PLAN_COLLECTION, 'pmmrs_textiles_andina_2027');
+    return onSnapshot(mainDocRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        onData({
+          ...data,
+          id: data.id || snap.id,
+          esDemo: true
+        } as PMMRSPlan);
+      } else {
+        onData(null);
+      }
+    }, (err) => {
+      console.warn('Error suscribiendo a modelo_plan:', err);
+      if (onError) onError(err);
+    });
+  } catch (err: any) {
+    console.error('Error inicializando suscripción a modelo_plan:', err);
+    if (onError) onError(err);
+    return () => {};
+  }
 }

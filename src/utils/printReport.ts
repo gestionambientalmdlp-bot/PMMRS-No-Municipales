@@ -3,6 +3,7 @@ import { jsPDF } from 'jspdf';
 import { getEvaluationResult } from './auditEngine';
 import { CASA_ALTAIR_LOGO_BASE64 } from '../assets/casaAltairLogo';
 import { parseMarkdownTableStrings } from './excelAnnexes';
+import { processPlanCuadros } from './cuadrosProcessor';
 
 const COPYRIGHT_TEXT = `Elaborado y diseñado por Casa Altair - Equilibria (<a href="mailto:casa_altair@equilibria360.com" style="color: #6C0053; text-decoration: underline;">casa_altair@equilibria360.com</a>). Lima, Perú — Setiembre de 2026`;
 
@@ -29,14 +30,15 @@ export function formatChapterForPrintHtml(content: string): string {
         return `<h4 style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #6C0053; margin: 14px 0 6px 0; font-weight: bold; border-bottom: 1px solid #fbcfe8; padding-bottom: 3px;">${trimmed.replace('### ', '')}</h4>`;
       }
       if (trimmed.startsWith('> *') && trimmed.endsWith('*')) {
-        return `<p style="font-family: Arial, sans-serif; font-size: 8.5pt; color: #4b5563; font-style: italic; background: #fdf2f8; padding: 5px 10px; border-left: 3px solid #70BA74; margin: 6px 0 10px 0;">${trimmed.replace(/^>\s*\*/, '').replace(/\*$/, '')}</p>`;
+        return '';
       }
       return `<p style="text-align: justify; line-height: 1.5; font-size: 10.5pt; color: #1f2937; margin: 0 0 8px 0;">${trimmed}</p>`;
     }).join('');
   }).join('');
 }
 
-export function generatePlanHtml(plan: PMMRSPlan): string {
+export function generatePlanHtml(rawPlan: PMMRSPlan): string {
+  const plan = processPlanCuadros(rawPlan);
   const totalResiduosKg = plan.residuos.reduce((acc, curr) => acc + (Number(curr.generacionEstimadaKgMes) || 0), 0);
   const totalPeligrososKg = plan.residuos.filter(r => r.tipo === 'Peligroso').reduce((acc, curr) => acc + (Number(curr.generacionEstimadaKgMes) || 0), 0);
   const totalNoPeligrososKg = totalResiduosKg - totalPeligrososKg;
@@ -71,54 +73,47 @@ export function generatePlanHtml(plan: PMMRSPlan): string {
   <style>
     @page {
       size: A4 portrait;
-      margin: 0;
+      margin: 15mm 20mm;
     }
     body {
       font-family: "Times New Roman", Times, serif;
       color: #111827;
       background: #ffffff;
       margin: 0;
-      padding: 15mm 20mm 20mm 20mm;
+      padding: 0;
       font-size: 11pt;
       line-height: 1.4;
     }
-    .header-box {
+    .no-print-bar {
+      background: #6C0053;
+      color: white;
+      padding: 12px 20px;
       text-align: center;
-      border-bottom: 3px solid #6C0053;
-      padding-bottom: 12px;
-      margin-bottom: 24px;
-    }
-    .header-box h2 {
       font-family: Arial, sans-serif;
-      font-size: 11pt;
-      color: #4b5563;
-      margin: 0 0 4px 0;
-      letter-spacing: 1px;
-      text-transform: uppercase;
+      font-size: 10pt;
+      margin-bottom: 20px;
+      border-radius: 8px;
     }
-    .header-box h1 {
-      font-family: Arial, sans-serif;
-      font-size: 15pt;
-      color: #6C0053;
-      margin: 4px 0;
-      text-transform: uppercase;
-      font-weight: 800;
-    }
-    .header-box p {
-      font-family: Arial, sans-serif;
-      font-size: 9.5pt;
-      color: #6b7280;
-      margin: 4px 0 0 0;
+    .btn-print {
+      background: #70BA74;
+      color: white;
+      border: none;
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-left: 14px;
+      font-size: 10.5pt;
     }
     .section-title {
       font-family: Arial, sans-serif;
       font-size: 12pt;
       font-weight: bold;
       color: #6C0053;
-      border-bottom: 1px solid #d1d5db;
+      border-bottom: 1.5px solid #6C0053;
       padding-bottom: 4px;
-      margin-top: 20px;
-      margin-bottom: 10px;
+      margin-top: 15px;
+      margin-bottom: 12px;
       text-transform: uppercase;
     }
     .data-grid {
@@ -129,19 +124,20 @@ export function generatePlanHtml(plan: PMMRSPlan): string {
       font-size: 9.5pt;
       margin-bottom: 20px;
       background: #fdf2f8;
-      padding: 12px;
+      padding: 14px;
       border-radius: 6px;
       border: 1px solid #fbcfe8;
     }
     .data-grid p {
       margin: 0;
+      color: #374151;
     }
     table {
       width: 100%;
       border-collapse: collapse;
       font-family: Arial, sans-serif;
       font-size: 9pt;
-      margin: 14px 0 24px 0;
+      margin: 14px 0 20px 0;
     }
     th {
       background-color: #6C0053;
@@ -149,6 +145,32 @@ export function generatePlanHtml(plan: PMMRSPlan): string {
       border: 1px solid #6C0053;
       padding: 7px 8px;
       text-align: left;
+    }
+    .page-cover {
+      box-sizing: border-box;
+      min-height: 250mm;
+      padding: 15mm 10mm 15mm 10mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      text-align: center;
+      page-break-after: always;
+      break-after: page;
+    }
+    .page-company {
+      box-sizing: border-box;
+      min-height: 250mm;
+      padding-top: 10mm;
+      page-break-before: always;
+      break-before: page;
+      page-break-after: always;
+      break-after: page;
+    }
+    .page-chapters {
+      box-sizing: border-box;
+      padding-top: 10mm;
+      page-break-before: always;
+      break-before: page;
     }
     .signatures {
       display: grid;
@@ -174,107 +196,171 @@ export function generatePlanHtml(plan: PMMRSPlan): string {
       font-size: 8.5pt;
       color: #6b7280;
     }
-    .no-print-bar {
-      background: #6C0053;
-      color: white;
-      padding: 12px 20px;
-      text-align: center;
-      font-family: Arial, sans-serif;
-      font-size: 10pt;
-      margin-bottom: 20px;
-      border-radius: 8px;
-    }
-    .btn-print {
-      background: #70BA74;
-      color: white;
-      border: none;
-      padding: 8px 20px;
-      border-radius: 6px;
-      font-weight: bold;
-      cursor: pointer;
-      margin-left: 14px;
-      font-size: 10.5pt;
-    }
     @media print {
       .no-print-bar {
         display: none !important;
       }
       body {
-        padding: 0;
+        padding: 0 !important;
+      }
+      .page-cover {
+        height: 270mm;
+      }
+      .page-company {
+        height: 270mm;
       }
     }
   </style>
 </head>
 <body>
   <div class="no-print-bar">
-    <span>Documento preparado para formato oficial A4 (R.M. N.° 089-2023-MINAM).</span>
+    <span>Documento preparado para formato oficial A4 (R.M. N.° 089-2023-MINAM). Secuencia: Hoja 1 Carátula, Hoja 2 Datos Empresa, Hoja 3 Capítulos.</span>
     <button class="btn-print" onclick="window.print()">Imprimir / Guardar como PDF (Ctrl+P)</button>
   </div>
 
-  <div class="header-box">
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-      <div style="width: 80px; text-align: left;">
-        ${plan.header?.logoUrl ? `<img src="${plan.header.logoUrl}" style="max-height: 55px; max-width: 80px; object-fit: contain;" alt="Logotipo Institucional" />` : ''}
-      </div>
-      <div style="flex: 1; text-align: center;">
-        <h2>${plan.header.razonSocialHeader || plan.company.razonSocial || 'EMPRESA GENERADORA'}</h2>
-      </div>
-      <div style="width: 80px;"></div>
-    </div>
-    <h1>${plan.header.tituloDocumento}</h1>
-    <p>${plan.header.version} — Fecha de Emisión: ${plan.header.fechaEmision || new Date().toLocaleDateString('es-PE')}</p>
-  </div>
-
-  <div class="section-title">I. Datos Generales de la Empresa y del Establecimiento</div>
-  <div class="data-grid">
-    <p><strong>Razón Social:</strong> ${plan.company.razonSocial || 'No especificado'}</p>
-    <p><strong>RUC:</strong> ${plan.company.ruc || 'No especificado'}</p>
-    <p><strong>Nombre Comercial:</strong> ${plan.company.nombreComercial || 'No especificado'}</p>
-    <p><strong>Domicilio:</strong> ${plan.company.domicilio || 'No especificado'}</p>
-    <p><strong>Ubicación:</strong> ${plan.company.distrito}, ${plan.company.provincia}, ${plan.company.departamento}</p>
-    <p><strong>Representante Legal:</strong> ${plan.company.representanteLegal} (DNI: ${plan.company.dniRepresentante})</p>
-    <p><strong>Sector / Actividad:</strong> ${plan.company.sector} — ${plan.company.actividadEconomica}</p>
-    <p><strong>N.° Trabajadores:</strong> ${plan.company.numeroTrabajadores} | <strong>Horario:</strong> ${plan.company.horarioOperacion}</p>
-  </div>
-
-  <div class="section-title">II. Capítulos del Plan de Minimización y Manejo</div>
-  ${chaptersHtml}
-
-  <div class="section-title" style="page-break-before: auto;">III. Cuadro de Resumen y Almacenamiento (NTP 900.058:2019)</div>
-  <p style="font-family: Arial, sans-serif; font-size: 9pt; color: #4b5563; margin-bottom: 8px;">
-    Generación Total Estimada: <strong>${totalResiduosKg} kg/mes</strong> (No Peligrosos: <strong>${totalNoPeligrososKg} kg/mes</strong> | Peligrosos: <strong>${totalPeligrososKg} kg/mes</strong>).
-  </p>
-  <table>
-    <thead>
-      <tr>
-        <th style="width: 5%;">N.°</th>
-        <th style="width: 12%;">Tipo</th>
-        <th style="width: 33%;">Categoría / Descripción</th>
-        <th style="width: 15%;">Gen. Estimada</th>
-        <th style="width: 17%;">Color NTP 900.058</th>
-        <th style="width: 18%;">Destino Final / EO-RS</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rowsHtml || '<tr><td colspan="6" style="text-align: center; padding: 12px;">No se registraron residuos</td></tr>'}
-    </tbody>
-  </table>
-
-  <div class="signatures">
+  <!-- ==================== HOJA 1: CARÁTULA ==================== -->
+  <div class="page-cover">
     <div>
-      <div class="signature-line"></div>
-      <strong>${plan.header.elaboradoPor || 'Especialista Ambiental'}</strong>
-      <div style="font-size: 8.5pt; color: #6b7280;">Elaborado por (Responsable Técnico)</div>
+      <div style="border-bottom: 3px solid #6C0053; padding-bottom: 12px; margin-bottom: 24px;">
+        ${plan.header?.logoUrl ? `<img src="${plan.header.logoUrl}" style="max-height: 65px; max-width: 140px; object-fit: contain; margin-bottom: 8px;" alt="Logotipo Institucional" />` : ''}
+        <h2 style="font-family: Arial, sans-serif; font-size: 13pt; color: #4b5563; margin: 0; letter-spacing: 2px; text-transform: uppercase; font-weight: bold;">
+          ${plan.header.razonSocialHeader || plan.company.razonSocial || 'EMPRESA TITULAR'}
+        </h2>
+      </div>
+
+      <div style="margin: 45px 0 35px 0;">
+        <p style="font-family: Arial, sans-serif; font-size: 10pt; color: #70BA74; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px;">
+          INSTRUMENTO TÉCNICO DE GESTIÓN AMBIENTAL
+        </p>
+        <h1 style="font-family: Arial, sans-serif; font-size: 20pt; color: #6C0053; margin: 0 0 16px 0; text-transform: uppercase; font-weight: 900; line-height: 1.35;">
+          ${plan.header.tituloDocumento || 'PLAN DE MINIMIZACIÓN Y MANEJO DE RESIDUOS SÓLIDOS NO MUNICIPALES'}
+        </h1>
+        <div style="width: 70px; height: 3.5px; background: #6C0053; margin: 18px auto;"></div>
+        <p style="font-family: Arial, sans-serif; font-size: 10pt; color: #4b5563; line-height: 1.5; max-width: 580px; margin: 0 auto;">
+          Formulado conforme al contenido mínimo aprobado por la <strong>Resolución Ministerial N.° 089-2023-MINAM</strong>, en concordancia con el Decreto Legislativo N.° 1278 (Ley de Gestión Integral de Residuos Sólidos) y su Reglamento D.S. N.° 014-2017-MINAM.
+        </p>
+      </div>
+
+      <div style="background: #fdf2f8; border: 1.5px solid #fbcfe8; border-radius: 8px; padding: 18px 24px; max-width: 540px; margin: 0 auto; text-align: left; font-family: Arial, sans-serif; font-size: 9.5pt; line-height: 1.6;">
+        <p style="margin: 4px 0;"><strong>Empresa / Titular:</strong> ${plan.company.razonSocial}</p>
+        <p style="margin: 4px 0;"><strong>R.U.C.:</strong> ${plan.company.ruc}</p>
+        <p style="margin: 4px 0;"><strong>Establecimiento:</strong> ${plan.company.domicilio}</p>
+        <p style="margin: 4px 0;"><strong>Ubicación:</strong> ${plan.company.distrito}, ${plan.company.provincia}, ${plan.company.departamento}</p>
+        <p style="margin: 4px 0;"><strong>Actividad Económica:</strong> ${plan.company.actividadEconomica || plan.company.sector}</p>
+      </div>
     </div>
-    <div>
-      <div class="signature-line"></div>
-      <strong>${plan.header.aprobadoPor || plan.company.representanteLegal || 'Gerencia General'}</strong>
-      <div style="font-size: 8.5pt; color: #6b7280;">Aprobado por (Representante Legal)</div>
+
+    <div style="font-family: Arial, sans-serif; font-size: 9pt; color: #4b5563; line-height: 1.8; margin-top: 30px;">
+      <p style="margin: 3px 0;"><strong>Elaborado por:</strong> ${plan.header.elaboradoPor || 'Responsable Técnico Ambiental'}</p>
+      <p style="margin: 3px 0;"><strong>Aprobado por:</strong> ${plan.header.aprobadoPor || plan.company.representanteLegal || 'Gerencia General'}</p>
+      <p style="margin: 3px 0;"><strong>Periodo / Versión:</strong> ${plan.header.version || '2026-2027'} | <strong>Fecha de Emisión:</strong> ${plan.header.fechaEmision || new Date().toLocaleDateString('es-PE')}</p>
+      <p style="margin: 6px 0 0 0; font-weight: bold; color: #111827; letter-spacing: 0.5px;">Lima, Perú</p>
     </div>
   </div>
 
-  <div class="footer-copyright">
-    ${COPYRIGHT_TEXT}
+  <!-- ==================== HOJA 2: DATOS DE LA EMPRESA ==================== -->
+  <div class="page-company">
+    <div style="border-bottom: 2px solid #6C0053; padding-bottom: 6px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+      <span style="font-family: Arial, sans-serif; font-size: 8.5pt; font-weight: bold; color: #6C0053; text-transform: uppercase;">
+        ${plan.company.razonSocial || 'PMMRS'} — HOJA DE DATOS GENERALES (R.M. N.° 089-2023-MINAM)
+      </span>
+      <span style="font-family: Arial, sans-serif; font-size: 8pt; color: #6b7280;">Página 2</span>
+    </div>
+
+    <div class="section-title">I. Datos Generales de la Empresa y del Establecimiento</div>
+    <div class="data-grid">
+      <p><strong>Razón Social:</strong> ${plan.company.razonSocial || 'No especificado'}</p>
+      <p><strong>RUC:</strong> ${plan.company.ruc || 'No especificado'}</p>
+      <p><strong>Nombre Comercial:</strong> ${plan.company.nombreComercial || 'No especificado'}</p>
+      <p><strong>Domicilio Legal:</strong> ${plan.company.domicilio || 'No especificado'}</p>
+      <p><strong>Ubicación Geográfica:</strong> ${plan.company.distrito}, ${plan.company.provincia}, ${plan.company.departamento}</p>
+      <p><strong>Representante Legal:</strong> ${plan.company.representanteLegal} (DNI: ${plan.company.dniRepresentante})</p>
+      <p><strong>Sector / Actividad:</strong> ${plan.company.sector} — ${plan.company.actividadEconomica}</p>
+      <p><strong>Personal y Turnos:</strong> ${plan.company.numeroTrabajadores} trabajadores | ${plan.company.horarioOperacion}</p>
+      <p><strong>Teléfono de Contacto:</strong> ${plan.company.telefonoContacto || 'No especificado'}</p>
+      <p><strong>Correo Electrónico:</strong> ${plan.company.correoContacto || 'No especificado'}</p>
+    </div>
+
+    <h3 style="font-family: Arial, sans-serif; font-size: 10.5pt; color: #6C0053; margin: 18px 0 6px 0; font-weight: bold; text-transform: uppercase;">
+      Resumen de Generación y Almacenamiento de Residuos Sólidos (NTP 900.058:2019)
+    </h3>
+    <p style="font-family: Arial, sans-serif; font-size: 8.5pt; color: #4b5563; margin-bottom: 8px;">
+      Generación Total Estimada: <strong>${totalResiduosKg} kg/mes</strong> (No Peligrosos: <strong>${totalNoPeligrososKg} kg/mes</strong> | Peligrosos: <strong>${totalPeligrososKg} kg/mes</strong>).
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 5%;">N.°</th>
+          <th style="width: 14%;">Tipo</th>
+          <th style="width: 33%;">Categoría / Descripción</th>
+          <th style="width: 15%;">Gen. Estimada</th>
+          <th style="width: 16%;">Color NTP 900.058</th>
+          <th style="width: 17%;">Destino Final / EO-RS</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml || '<tr><td colspan="6" style="text-align: center; padding: 12px;">No se registraron residuos</td></tr>'}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ==================== HOJA 3 EN ADELANTE: CAPÍTULOS ==================== -->
+  <div class="page-chapters">
+    <div style="border-bottom: 2px solid #6C0053; padding-bottom: 6px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+      <span style="font-family: Arial, sans-serif; font-size: 8.5pt; font-weight: bold; color: #6C0053; text-transform: uppercase;">
+        ${plan.company.razonSocial || 'PMMRS'} — PLAN TÉCNICO OPERATIVO (CAPÍTULOS 1 AL 13)
+      </span>
+      <span style="font-family: Arial, sans-serif; font-size: 8pt; color: #6b7280;">Página 3 en adelante</span>
+    </div>
+
+    <div class="section-title">II. Capítulos del Plan de Minimización y Manejo</div>
+    ${chaptersHtml}
+
+    ${(plan.anexos && plan.anexos.length > 0) ? `
+    <div class="section-title" style="page-break-before: always;">III. Anexos Oficiales de la R.M. N.° 089-2023-MINAM (12 Anexos)</div>
+    ${plan.anexos.map(anexo => `
+      <div style="margin-bottom: 25px; page-break-inside: avoid;">
+        <h3 style="font-family: Arial, sans-serif; font-size: 11pt; color: #6C0053; margin: 14px 0 4px 0; border-bottom: 1.5px solid #FFDCF9; padding-bottom: 4px;">
+          ${anexo.codigo}: ${anexo.titulo}
+        </h3>
+        ${anexo.subtitulo ? `<p style="font-family: Arial, sans-serif; font-size: 8.5pt; color: #047857; margin: 2px 0 6px 0;"><strong>${anexo.subtitulo}</strong></p>` : ''}
+        <p style="font-family: Georgia, serif; font-size: 9.5pt; color: #374151; margin-bottom: 8px;">${anexo.descripcion}</p>
+        ${anexo.columnas && anexo.filas && anexo.filas.length > 0 ? `
+          <table>
+            <thead>
+              <tr>
+                ${anexo.columnas.map(col => `<th>${col}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${anexo.filas.map((fila, fIdx) => `
+                <tr style="background-color: ${fIdx % 2 === 0 ? '#ffffff' : '#f9fafb'};">
+                  ${Object.values(fila).map((val: any) => `<td>${typeof val === 'number' && val > 1000 ? 'S/ ' + val.toLocaleString('es-PE') : String(val)}</td>`).join('')}
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : ''}
+      </div>
+    `).join('')}
+    ` : ''}
+
+    <div class="signatures">
+      <div>
+        <div class="signature-line"></div>
+        <strong>${plan.header.elaboradoPor || 'Especialista Ambiental'}</strong>
+        <div style="font-size: 8.5pt; color: #6b7280;">Elaborado por (Responsable Técnico)</div>
+      </div>
+      <div>
+        <div class="signature-line"></div>
+        <strong>${plan.header.aprobadoPor || plan.company.representanteLegal || 'Gerencia General'}</strong>
+        <div style="font-size: 8.5pt; color: #6b7280;">Aprobado por (Representante Legal)</div>
+      </div>
+    </div>
+
+    <div class="footer-copyright">
+      ${COPYRIGHT_TEXT}
+    </div>
   </div>
 </body>
 </html>`;
@@ -692,7 +778,99 @@ export function downloadJsonFile(data: object, filename: string): boolean {
   }
 }
 
-export function downloadPlanPdf(plan: PMMRSPlan, customFilename?: string): void {
+function drawPdfTable(
+  doc: jsPDF,
+  headers: string[],
+  rows: string[][],
+  startX: number,
+  startY: number,
+  totalWidth: number,
+  checkPageBreak: (needed: number) => void
+): number {
+  if (!headers || headers.length === 0) return startY;
+
+  let y = startY;
+  const colCount = headers.length;
+  const colWidths: number[] = [];
+  const defaultColWidth = totalWidth / colCount;
+
+  for (let c = 0; c < colCount; c++) {
+    const h = (headers[c] || '').toLowerCase();
+    if (h === 'n°' || h === 'no.' || h === 'n.' || h === 'n') {
+      colWidths.push(Math.min(10, defaultColWidth));
+    } else if (h.includes('código') || h.includes('periodo') || h.includes('categoría') || h.includes('unidades')) {
+      colWidths.push(Math.max(16, defaultColWidth * 0.75));
+    } else {
+      colWidths.push(defaultColWidth);
+    }
+  }
+
+  const currentTotal = colWidths.reduce((a, b) => a + b, 0);
+  const scale = totalWidth / currentTotal;
+  for (let c = 0; c < colCount; c++) {
+    colWidths[c] = colWidths[c] * scale;
+  }
+
+  // Draw Header
+  checkPageBreak(8);
+  doc.setFillColor(108, 0, 83); // #6C0053
+  doc.rect(startX, y, totalWidth, 6, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  doc.setTextColor(255, 255, 255);
+
+  let currentX = startX;
+  for (let c = 0; c < colCount; c++) {
+    const headerText = doc.splitTextToSize(headers[c] || '', colWidths[c] - 2);
+    doc.text(headerText[0] || headers[c] || '', currentX + 1.5, y + 4.2);
+    currentX += colWidths[c];
+  }
+  y += 6;
+
+  // Draw Rows
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.5);
+  doc.setTextColor(30, 30, 30);
+
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r] || [];
+    let maxLines = 1;
+    for (let c = 0; c < colCount; c++) {
+      const cellText = row[c] !== undefined && row[c] !== null ? String(row[c]) : '';
+      const lines = doc.splitTextToSize(cellText, colWidths[c] - 2);
+      if (lines.length > maxLines) maxLines = Math.min(3, lines.length);
+    }
+    const rowHeight = Math.max(5.5, maxLines * 3.2 + 2);
+
+    checkPageBreak(rowHeight + 2);
+
+    if (r % 2 === 0) {
+      doc.setFillColor(255, 255, 255);
+    } else {
+      doc.setFillColor(249, 250, 251); // #f9fafb
+    }
+    doc.rect(startX, y, totalWidth, rowHeight, 'F');
+
+    doc.setDrawColor(220, 220, 220);
+    doc.line(startX, y + rowHeight, startX + totalWidth, y + rowHeight);
+
+    currentX = startX;
+    for (let c = 0; c < colCount; c++) {
+      const cellText = row[c] !== undefined && row[c] !== null ? String(row[c]) : '';
+      const lines = doc.splitTextToSize(cellText, colWidths[c] - 2);
+      for (let l = 0; l < Math.min(lines.length, maxLines); l++) {
+        doc.text(lines[l], currentX + 1.5, y + 3.5 + (l * 3));
+      }
+      currentX += colWidths[c];
+    }
+    y += rowHeight;
+  }
+
+  return y;
+}
+
+export function downloadPlanPdf(rawPlan: PMMRSPlan, customFilename?: string): void {
+  const plan = processPlanCuadros(rawPlan);
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   const safeName = (plan.company.razonSocial || 'Plan').replace(/[^a-zA-Z0-9]/g, '_');
   const filename = customFilename || `PMMRS_${safeName}_2026.pdf`;
@@ -704,11 +882,22 @@ export function downloadPlanPdf(plan: PMMRSPlan, customFilename?: string): void 
   let y = margin;
   let pageNumber = 1;
 
-  const addHeaderAndFooter = () => {
+  const addHeaderAndFooter = (page: number, customTitle?: string) => {
     // Header top bar
     doc.setFillColor(108, 0, 83); // #6C0053
     doc.rect(margin, 10, contentWidth, 1.2, 'F');
     
+    // Top running text (pages 2+)
+    if (page > 1) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(108, 0, 83);
+      doc.text(customTitle || (plan.company.razonSocial || 'PMMRS').toUpperCase(), margin, 8.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(120, 120, 120);
+      doc.text('R.M. N.° 089-2023-MINAM', pageWidth - margin, 8.5, { align: 'right' });
+    }
+
     // Footer
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
@@ -721,7 +910,7 @@ export function downloadPlanPdf(plan: PMMRSPlan, customFilename?: string): void 
       pageHeight - 8
     );
     doc.text(
-      `Página ${pageNumber}`,
+      `Página ${page}`,
       pageWidth - margin,
       pageHeight - 8,
       { align: 'right' }
@@ -730,93 +919,223 @@ export function downloadPlanPdf(plan: PMMRSPlan, customFilename?: string): void 
 
   const checkPageBreak = (neededHeight: number) => {
     if (y + neededHeight > pageHeight - 18) {
-      addHeaderAndFooter();
+      addHeaderAndFooter(pageNumber);
       doc.addPage();
       pageNumber++;
       y = margin + 5;
     }
   };
 
-  // --- COVER / HEADER ---
-  addHeaderAndFooter();
-  y = 20;
+  // =========================================================================
+  // HOJA 1: CARÁTULA OFICIAL
+  // =========================================================================
+  addHeaderAndFooter(1, 'Carátula');
+  y = 25;
 
   if (plan.header?.logoUrl) {
     try {
       const format = (plan.header.logoUrl.includes('image/jpeg') || plan.header.logoUrl.includes('image/jpg')) ? 'JPEG' : 'PNG';
-      doc.addImage(plan.header.logoUrl, format, margin, y, 16, 16);
-    } catch (err) {
-      console.warn('Could not add logo to PDF:', err);
+      doc.addImage(plan.header.logoUrl, format, (pageWidth / 2) - 12, y, 24, 24);
+      y += 28;
+    } catch {
+      y += 10;
     }
+  } else {
+    y += 15;
   }
 
+  // Company Name
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10.5);
-  doc.setTextColor(90, 90, 90);
-  doc.text((plan.header.razonSocialHeader || plan.company.razonSocial || 'EMPRESA TITULAR').toUpperCase(), pageWidth / 2, y + 6, { align: 'center' });
-  y += 7;
+  doc.setFontSize(14);
+  doc.setTextColor(75, 85, 99);
+  doc.text((plan.header.razonSocialHeader || plan.company.razonSocial || 'EMPRESA TITULAR').toUpperCase(), pageWidth / 2, y, { align: 'center' });
+  y += 15;
 
-  doc.setFontSize(12.5);
+  // Subtitle category
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(112, 186, 116); // #70BA74
+  doc.text('INSTRUMENTO TÉCNICO DE GESTIÓN AMBIENTAL', pageWidth / 2, y, { align: 'center' });
+  y += 10;
+
+  // Big Document Title
+  doc.setFontSize(15);
   doc.setTextColor(108, 0, 83);
-  doc.text(plan.header.tituloDocumento || 'PLAN DE MINIMIZACIÓN Y MANEJO DE RESIDUOS SÓLIDOS (PMMRS)', pageWidth / 2, y + 5, { align: 'center' });
-  y += 6;
+  const titleLines = doc.splitTextToSize(plan.header.tituloDocumento || 'PLAN DE MINIMIZACIÓN Y MANEJO DE RESIDUOS SÓLIDOS NO MUNICIPALES', contentWidth - 20);
+  for (const tLine of titleLines) {
+    doc.text(tLine, pageWidth / 2, y, { align: 'center' });
+    y += 6.5;
+  }
 
+  // Accent divider
+  doc.setFillColor(108, 0, 83);
+  doc.rect((pageWidth / 2) - 20, y + 2, 40, 1.2, 'F');
+  y += 12;
+
+  // Regulatory reference paragraph
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
-  doc.setTextColor(120, 120, 120);
-  doc.text(`${plan.header.version || 'Versión 1.0 - 2026'} — Fecha de Emisión: ${plan.header.fechaEmision || new Date().toLocaleDateString('es-PE')}`, pageWidth / 2, y + 4, { align: 'center' });
-  y += 9;
+  doc.setTextColor(100, 100, 100);
+  const regLines = doc.splitTextToSize('Formulado conforme al contenido mínimo aprobado por la Resolución Ministerial N.° 089-2023-MINAM, en concordancia con el Decreto Legislativo N.° 1278 (Ley de Gestión Integral de Residuos Sólidos) y su Reglamento D.S. N.° 014-2017-MINAM.', contentWidth - 30);
+  for (const rLine of regLines) {
+    doc.text(rLine, pageWidth / 2, y, { align: 'center' });
+    y += 4.5;
+  }
+  y += 8;
 
-  // --- SECCIÓN I: DATOS GENERALES ---
-  doc.setFillColor(248, 248, 250);
-  doc.setDrawColor(215, 215, 225);
-  doc.roundedRect(margin, y, contentWidth, 38, 2, 2, 'FD');
+  // Company Summary Card
+  doc.setFillColor(253, 242, 248); // #fdf2f8
+  doc.setDrawColor(251, 207, 232); // #fbcfe8
+  doc.roundedRect(margin + 5, y, contentWidth - 10, 42, 2, 2, 'FD');
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.setTextColor(108, 0, 83);
-  doc.text('I. DATOS GENERALES DE LA EMPRESA Y DEL ESTABLECIMIENTO', margin + 4, y + 6);
+  doc.text('DATOS DE IDENTIFICACIÓN DEL TITULAR', margin + 10, y + 6);
+
+  doc.setFontSize(8);
+  doc.setTextColor(40, 40, 40);
+  let cardY = y + 13;
+  doc.setFont('helvetica', 'bold'); doc.text('Empresa / Razón Social:', margin + 10, cardY);
+  doc.setFont('helvetica', 'normal'); doc.text(plan.company.razonSocial || 'No especificado', margin + 46, cardY);
+  cardY += 5.5;
+  doc.setFont('helvetica', 'bold'); doc.text('R.U.C.:', margin + 10, cardY);
+  doc.setFont('helvetica', 'normal'); doc.text(plan.company.ruc || 'No especificado', margin + 46, cardY);
+  cardY += 5.5;
+  doc.setFont('helvetica', 'bold'); doc.text('Establecimiento:', margin + 10, cardY);
+  doc.setFont('helvetica', 'normal'); doc.text((plan.company.domicilio || 'No especificado').slice(0, 50), margin + 46, cardY);
+  cardY += 5.5;
+  doc.setFont('helvetica', 'bold'); doc.text('Ubicación:', margin + 10, cardY);
+  doc.setFont('helvetica', 'normal'); doc.text(`${plan.company.distrito || ''}, ${plan.company.provincia || ''}, ${plan.company.departamento || ''}`, margin + 46, cardY);
+  cardY += 5.5;
+  doc.setFont('helvetica', 'bold'); doc.text('Actividad Económica:', margin + 10, cardY);
+  doc.setFont('helvetica', 'normal'); doc.text((plan.company.actividadEconomica || plan.company.sector || 'Industrial').slice(0, 48), margin + 46, cardY);
+
+  y += 56;
+
+  // Metadata block at bottom of Cover Page
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(70, 70, 70);
+  doc.text(`Elaborado por: ${plan.header.elaboradoPor || 'Responsable Técnico Ambiental'}`, pageWidth / 2, y, { align: 'center' });
+  y += 5;
+  doc.text(`Aprobado por: ${plan.header.aprobadoPor || plan.company.representanteLegal || 'Gerencia General'}`, pageWidth / 2, y, { align: 'center' });
+  y += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Periodo: ${plan.header.version || '2026-2027'} | Fecha: ${plan.header.fechaEmision || new Date().toLocaleDateString('es-PE')}`, pageWidth / 2, y, { align: 'center' });
+  y += 6;
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(30, 30, 30);
+  doc.text('Lima, Perú', pageWidth / 2, y, { align: 'center' });
+
+  // END OF PAGE 1 -> MOVE TO PAGE 2
+  doc.addPage();
+  pageNumber++;
+  addHeaderAndFooter(pageNumber, 'PMMRS - DATOS GENERALES');
+  y = margin + 5;
+
+  // =========================================================================
+  // HOJA 2: DATOS GENERALES DE LA EMPRESA Y RESUMEN NTP 900.058
+  // =========================================================================
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.setTextColor(108, 0, 83);
+  doc.text('I. DATOS GENERALES DE LA EMPRESA Y DEL ESTABLECIMIENTO', margin, y);
+  doc.setDrawColor(108, 0, 83);
+  doc.line(margin, y + 2, margin + contentWidth, y + 2);
+  y += 8;
+
+  doc.setFillColor(248, 248, 250);
+  doc.setDrawColor(215, 215, 225);
+  doc.roundedRect(margin, y, contentWidth, 48, 2, 2, 'FD');
 
   doc.setFontSize(8);
   doc.setTextColor(50, 50, 50);
   
   const col1 = margin + 4;
   const col2 = margin + (contentWidth / 2) + 2;
-  let dy = y + 13;
+  let dy = y + 7;
 
   doc.setFont('helvetica', 'bold'); doc.text('Razón Social:', col1, dy);
   doc.setFont('helvetica', 'normal'); doc.text(plan.company.razonSocial || 'No especificado', col1 + 22, dy);
   doc.setFont('helvetica', 'bold'); doc.text('RUC:', col2, dy);
   doc.setFont('helvetica', 'normal'); doc.text(plan.company.ruc || 'No especificado', col2 + 10, dy);
 
-  dy += 5.5;
+  dy += 6;
   doc.setFont('helvetica', 'bold'); doc.text('Nombre Com.:', col1, dy);
   doc.setFont('helvetica', 'normal'); doc.text(plan.company.nombreComercial || 'No especificado', col1 + 22, dy);
   doc.setFont('helvetica', 'bold'); doc.text('Domicilio:', col2, dy);
   doc.setFont('helvetica', 'normal'); doc.text((plan.company.domicilio || 'No especificado').slice(0, 42), col2 + 16, dy);
 
-  dy += 5.5;
+  dy += 6;
   doc.setFont('helvetica', 'bold'); doc.text('Ubicación:', col1, dy);
   doc.setFont('helvetica', 'normal'); doc.text(`${plan.company.distrito || ''}, ${plan.company.provincia || ''}, ${plan.company.departamento || ''}`, col1 + 18, dy);
   doc.setFont('helvetica', 'bold'); doc.text('Representante:', col2, dy);
-  doc.setFont('helvetica', 'normal'); doc.text(`${plan.company.representanteLegal || 'No especificado'}`, col2 + 22, dy);
+  doc.setFont('helvetica', 'normal'); doc.text(`${plan.company.representanteLegal || 'No especificado'} (DNI: ${plan.company.dniRepresentante || 'N/A'})`, col2 + 22, dy);
 
-  dy += 5.5;
+  dy += 6;
   doc.setFont('helvetica', 'bold'); doc.text('Actividad/CIIU:', col1, dy);
   doc.setFont('helvetica', 'normal'); doc.text((plan.company.actividadEconomica || 'Manufactura').slice(0, 38), col1 + 22, dy);
   doc.setFont('helvetica', 'bold'); doc.text('Personal / Turno:', col2, dy);
   doc.setFont('helvetica', 'normal'); doc.text(`${plan.company.numeroTrabajadores || 0} trab. | ${plan.company.horarioOperacion || 'Doble turno'}`, col2 + 25, dy);
 
-  y += 45;
+  dy += 6;
+  doc.setFont('helvetica', 'bold'); doc.text('Teléfono:', col1, dy);
+  doc.setFont('helvetica', 'normal'); doc.text(plan.company.telefonoContacto || 'No especificado', col1 + 18, dy);
+  doc.setFont('helvetica', 'bold'); doc.text('Correo:', col2, dy);
+  doc.setFont('helvetica', 'normal'); doc.text(plan.company.correoContacto || 'No especificado', col2 + 16, dy);
 
-  // --- SECCIÓN II: CAPÍTULOS DEL PLAN (13 SECCIONES) ---
+  y += 58;
+
+  // Waste Inventory Summary Table on Page 2
+  const totalResiduosKg = plan.residuos.reduce((acc, curr) => acc + (Number(curr.generacionEstimadaKgMes) || 0), 0);
+  const totalPeligrososKg = plan.residuos.filter(r => r.tipo === 'Peligroso').reduce((acc, curr) => acc + (Number(curr.generacionEstimadaKgMes) || 0), 0);
+  const totalNoPeligrososKg = totalResiduosKg - totalPeligrososKg;
+
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
+  doc.setFontSize(9.5);
+  doc.setTextColor(108, 0, 83);
+  doc.text('RESUMEN DE GENERACIÓN Y ALMACENAMIENTO DE RESIDUOS (NTP 900.058:2019)', margin, y);
+  doc.setDrawColor(108, 0, 83);
+  doc.line(margin, y + 2, margin + contentWidth, y + 2);
+  y += 6;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(70, 70, 70);
+  doc.text(`Generación Total Estimada: ${totalResiduosKg} kg/mes (No Peligrosos: ${totalNoPeligrososKg} kg/mes | Peligrosos: ${totalPeligrososKg} kg/mes)`, margin, y);
+  y += 5;
+
+  const wasteHeaders = ['N°', 'Tipo', 'Categoría / Descripción', 'Gen. Estimada', 'Color NTP 900.058', 'Destino Final / EO-RS'];
+  const wasteRows = plan.residuos.map((res, i) => [
+    String(i + 1),
+    res.tipo,
+    `${res.categoria}: ${res.descripcion}`.slice(0, 42),
+    `${res.generacionEstimadaKgMes} kg/mes`,
+    res.colorContenedorNtp.slice(0, 20),
+    res.destinoFinal.slice(0, 24)
+  ]);
+
+  y = drawPdfTable(doc, wasteHeaders, wasteRows, margin, y, contentWidth, checkPageBreak);
+
+  // END OF PAGE 2 -> MOVE TO PAGE 3
+  doc.addPage();
+  pageNumber++;
+  addHeaderAndFooter(pageNumber, 'PMMRS - CAPÍTULOS TÉCNICOS');
+  y = margin + 5;
+
+  // =========================================================================
+  // HOJA 3 EN ADELANTE: CAPÍTULOS TÉCNICOS (1 AL 13)
+  // =========================================================================
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
   doc.setTextColor(108, 0, 83);
   doc.text('II. CAPÍTULOS DEL PLAN DE MINIMIZACIÓN Y MANEJO (R.M. 089-2023-MINAM)', margin, y);
   doc.setDrawColor(108, 0, 83);
   doc.line(margin, y + 2, margin + contentWidth, y + 2);
-  y += 7;
+  y += 8;
 
   for (const cap of plan.capitulos) {
     checkPageBreak(25);
@@ -828,92 +1147,59 @@ export function downloadPlanPdf(plan: PMMRSPlan, customFilename?: string): void 
     doc.setFontSize(8.5);
     doc.setTextColor(108, 0, 83);
     doc.text(cap.titulo.toUpperCase(), margin + 2, y + 0.8);
-    y += 5.5;
+    y += 6.5;
 
-    // Chapter Content
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(30, 30, 30);
+    // Parse chapter content into text segments and tables
+    const segments = parseMarkdownTableStrings(cap.contenido || '[Contenido pendiente de formulación]');
 
-    const paragraphs = (cap.contenido || '[Contenido pendiente de formulación]').split('\n');
-    for (const para of paragraphs) {
-      if (!para.trim()) {
-        y += 2;
-        continue;
-      }
-      const lines = doc.splitTextToSize(para, contentWidth);
-      for (const line of lines) {
-        checkPageBreak(4.5);
-        doc.text(line, margin, y);
-        y += 3.8;
-      }
-      y += 1.5;
-    }
-    y += 3.5;
-  }
-
-  // --- SECCIÓN III: TABLA DE RESIDUOS NTP 900.058 ---
-  if (plan.residuos && plan.residuos.length > 0) {
-    checkPageBreak(35);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    doc.setTextColor(108, 0, 83);
-    doc.text('III. CUADRO DE RESUMEN Y ALMACENAMIENTO (NTP 900.058:2019)', margin, y);
-    doc.line(margin, y + 2, margin + contentWidth, y + 2);
-    y += 6;
-
-    // Table Header
-    doc.setFillColor(108, 0, 83);
-    doc.rect(margin, y, contentWidth, 5.5, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
-    doc.setTextColor(255, 255, 255);
-    doc.text('N°', margin + 2, y + 3.8);
-    doc.text('Tipo', margin + 10, y + 3.8);
-    doc.text('Categoría / Descripción', margin + 28, y + 3.8);
-    doc.text('Gen. Estimada', margin + 95, y + 3.8);
-    doc.text('Color NTP 900.058', margin + 120, y + 3.8);
-    doc.text('Destino Final / EO-RS', margin + 148, y + 3.8);
-    y += 5.5;
-
-    // Table Rows
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.setTextColor(30, 30, 30);
-
-    plan.residuos.forEach((res, i) => {
-      checkPageBreak(6.5);
-      if (i % 2 === 0) {
-        doc.setFillColor(250, 250, 250);
-        doc.rect(margin, y, contentWidth, 5.5, 'F');
-      }
-      doc.setDrawColor(220, 220, 220);
-      doc.line(margin, y + 5.5, margin + contentWidth, y + 5.5);
-
-      doc.text(String(i + 1), margin + 2, y + 3.8);
-      
-      doc.setFont('helvetica', 'bold');
-      if (res.tipo === 'Peligroso') {
-        doc.setTextColor(185, 28, 28);
+    for (const seg of segments) {
+      if (seg.type === 'table' && seg.headers && seg.headers.length > 0) {
+        y = drawPdfTable(doc, seg.headers, seg.rows || [], margin, y + 1, contentWidth, checkPageBreak);
+        y += 4;
       } else {
-        doc.setTextColor(21, 128, 61);
-      }
-      doc.text(res.tipo, margin + 10, y + 3.8);
+        const paragraphs = seg.content.split('\n');
+        for (const para of paragraphs) {
+          const trimmed = para.trim();
+          if (!trimmed) {
+            y += 2;
+            continue;
+          }
 
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(30, 30, 30);
-      const desc = `${res.categoria}: ${res.descripcion}`.slice(0, 38);
-      doc.text(desc, margin + 28, y + 3.8);
-      doc.text(`${res.generacionEstimadaKgMes} kg/mes`, margin + 95, y + 3.8);
-      doc.text(res.colorContenedorNtp.slice(0, 18), margin + 120, y + 3.8);
-      doc.text(res.destinoFinal.slice(0, 20), margin + 148, y + 3.8);
-      y += 5.5;
-    });
-    y += 5;
+          if (trimmed.startsWith('### ')) {
+            // Cuadro title heading
+            checkPageBreak(12);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8);
+            doc.setTextColor(108, 0, 83);
+            doc.text(trimmed.replace('### ', ''), margin, y);
+            y += 4.5;
+            continue;
+          }
+
+          if (trimmed.startsWith('> *') && trimmed.endsWith('*')) {
+            // Skip redundant badge line
+            continue;
+          }
+
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(7.8);
+          doc.setTextColor(30, 30, 30);
+
+          const lines = doc.splitTextToSize(trimmed, contentWidth);
+          for (const line of lines) {
+            checkPageBreak(4.5);
+            doc.text(line, margin, y);
+            y += 3.8;
+          }
+          y += 1.5;
+        }
+      }
+    }
+    y += 4;
   }
 
-  // --- SIGNATURES ---
-  checkPageBreak(30);
+  // Signatures block at end
+  checkPageBreak(32);
   y += 8;
   const sigCol1 = margin + 20;
   const sigCol2 = margin + contentWidth - 65;
@@ -934,7 +1220,7 @@ export function downloadPlanPdf(plan: PMMRSPlan, customFilename?: string): void 
   doc.text('Elaborado por (Responsable Técnico)', sigCol1 + 22.5, y + 8, { align: 'center' });
   doc.text('Aprobado por (Representante Legal)', sigCol2 + 22.5, y + 8, { align: 'center' });
 
-  addHeaderAndFooter();
+  addHeaderAndFooter(pageNumber);
 
   doc.save(filename);
 }

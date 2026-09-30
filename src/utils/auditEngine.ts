@@ -8,7 +8,6 @@ import {
   UploadedPMMRSDocument,
   EvaluationResult
 } from '../types';
-import { DEMO_PLAN } from '../data/demoData';
 import { ContenidoMinimoItem, MarcoNormativoItem } from '../services/firestoreService';
 
 /**
@@ -114,10 +113,8 @@ export function runSpecializedAudit(
       rawText.includes('20548912341')
     ));
 
-  // If this is the demo plan or uploaded demo document, guarantee complete active plan data
-  const targetPlan: PMMRSPlan = (isDemo && (!plan.capitulos[0]?.contenido || plan.capitulos[0]?.contenido.length < 50))
-    ? DEMO_PLAN
-    : plan;
+  // Target plan being audited
+  const targetPlan: PMMRSPlan = plan;
 
   // Metadata detection
   const docRuc = uploadedDoc?.detectedRuc || targetPlan.company.ruc || (isDemo ? '20548912341' : '');

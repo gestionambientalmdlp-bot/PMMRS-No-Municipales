@@ -11,18 +11,23 @@ import {
   toggleMarcoNormativoActive, 
   deleteMarcoNormativoItem,
   seedContenidoMinimo,
-  seedMarcoNormativo
+  seedMarcoNormativo,
+  subscribeModeloPlan,
+  getModeloPlanFromFirestore
 } from '../services/firestoreService';
 import { MASTER_REQUIREMENTS, NORMATIVE_DOCUMENTS } from '../data/normativaData';
+import { PMMRSPlan } from '../types';
 
 interface FirestoreContextType {
   contenidoMinimo: ContenidoMinimoItem[];
   activeCriterios: ContenidoMinimoItem[];
   marcoNormativo: MarcoNormativoItem[];
   activeNormas: MarcoNormativoItem[];
+  modeloPlan: PMMRSPlan | null;
   loading: boolean;
   error: string | null;
   isFirestoreConnected: boolean;
+  fetchModeloPlan: () => Promise<PMMRSPlan | null>;
   // CRUD Contenido Mínimo
   saveCriterion: (item: Partial<ContenidoMinimoItem>) => Promise<string>;
   toggleCriterion: (id: string, activo: boolean) => Promise<void>;
@@ -79,6 +84,7 @@ const FALLBACK_NORMAS: MarcoNormativoItem[] = NORMATIVE_DOCUMENTS.map((d) => ({
 export const FirestoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [contenidoMinimo, setContenidoMinimo] = useState<ContenidoMinimoItem[]>(FALLBACK_CRITERIA);
   const [marcoNormativo, setMarcoNormativo] = useState<MarcoNormativoItem[]>(FALLBACK_NORMAS);
+  const [modeloPlan, setModeloPlan] = useState<PMMRSPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFirestoreConnected, setIsFirestoreConnected] = useState(false);
@@ -86,6 +92,7 @@ export const FirestoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     let unsubscribeContenido: (() => void) | undefined;
     let unsubscribeNormas: (() => void) | undefined;
+    let unsubscribeModelo: (() => void) | undefined;
     let mounted = true;
 
     // Suscribir a 'contenido_minimo'
@@ -128,10 +135,25 @@ export const FirestoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
     );
 
+    // Suscribir al plan modelo oficial ('modelo_plan')
+    unsubscribeModelo = subscribeModeloPlan(
+      (plan) => {
+        if (!mounted) return;
+        if (plan) {
+          setModeloPlan(plan);
+        }
+      },
+      (err) => {
+        if (!mounted) return;
+        console.warn('Conexión Firestore modelo_plan en modo de respaldo:', err.message);
+      }
+    );
+
     return () => {
       mounted = false;
       if (unsubscribeContenido) unsubscribeContenido();
       if (unsubscribeNormas) unsubscribeNormas();
+      if (unsubscribeModelo) unsubscribeModelo();
     };
   }, []);
 
@@ -187,9 +209,11 @@ export const FirestoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         activeCriterios,
         marcoNormativo,
         activeNormas,
+        modeloPlan,
         loading,
         error,
         isFirestoreConnected,
+        fetchModeloPlan: getModeloPlanFromFirestore,
         saveCriterion: handleSaveCriterion,
         toggleCriterion: handleToggleCriterion,
         deleteCriterion: handleDeleteCriterion,
