@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+@media print {
+  html, body, #root, main {
+    background: #ffffff !important;
+    color: #111827 !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    display: block !important;
+    position: static !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  aside, header, nav, button, .no-print {
+    display: none !important;
+  }
+  
+  .print-container {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    display: block !important;
+    page-break-after: auto;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  
+  body {
+    padding: 15mm 20mm 20mm 20mm !important;
+  }
+}
+
+

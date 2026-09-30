@@ -1,0 +1,6 @@
+{
+  "name": "PMMRS Perú - Gestor y Revisor de Residuos Sólidos No Municipales",
+  "description": "Aplicación profesional para elaborar, revisar y validar Planes de Minimización y Manejo de Residuos Sólidos No Municipales (R.M. N.° 089-2023-MINAM).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
